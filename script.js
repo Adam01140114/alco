@@ -1596,8 +1596,11 @@ function buildTimesheetTable(entries) {
       const newTbody = document.getElementById('admin-users-tbody');
       pUids.forEach(uid => {
         const tr = document.createElement('tr');
+        tr.setAttribute('data-uid', uid); // PATCH: add userId for context menu
         const nameTd = document.createElement('td');
         const userName = userMapPending[uid].userName;
+        window._adminUserIdMap = window._adminUserIdMap || {};
+        window._adminUserIdMap[userName] = uid; // PATCH: fill map
         // Check if any pending timesheet for this user is contested
         const hasContested = userMapPending[uid].timesheets.some(ts => ts.contested === true);
         nameTd.innerHTML = (hasContested ? '<span style="color:red">*</span> ' : '') + "<strong>" + userName + "</strong>";
@@ -1649,8 +1652,11 @@ function buildTimesheetTable(entries) {
       const newTbody = document.getElementById('admin-approved-tbody');
       aUids.forEach(uid => {
         const tr = document.createElement('tr');
+        tr.setAttribute('data-uid', uid); // PATCH: add userId for context menu
         const nameTd = document.createElement('td');
         const userName = userMapApproved[uid].userName;
+        window._adminUserIdMap = window._adminUserIdMap || {};
+        window._adminUserIdMap[userName] = uid; // PATCH: fill map
         nameTd.innerHTML = "<strong>" + userName + "</strong>";
         tr.appendChild(nameTd);
   
@@ -2463,3 +2469,100 @@ function sendTimesheetContestedEmail({
     console.error("Contest email failed:", error);
   });
 }
+
+// Add context menu for deleting all timesheets for a user in admin tables
+function addAdminUserContextMenu() {
+  // Remove any existing context menu
+  function removeMenu() {
+    const existing = document.getElementById('admin-user-context-menu');
+    if (existing) existing.remove();
+    document.removeEventListener('click', removeMenu);
+    document.removeEventListener('scroll', removeMenu, true);
+  }
+
+  // Attach to both pending and approved tables
+  ['admin-users-tbody', 'admin-approved-tbody'].forEach(tbodyId => {
+    const tbody = document.getElementById(tbodyId);
+    if (!tbody) return;
+    Array.from(tbody.querySelectorAll('tr')).forEach(tr => {
+      const nameTd = tr.querySelector('td');
+      if (!nameTd) return;
+      nameTd.oncontextmenu = async (e) => {
+        e.preventDefault();
+        removeMenu();
+        const menu = document.createElement('div');
+        menu.id = 'admin-user-context-menu';
+        menu.style.position = 'fixed';
+        menu.style.top = e.clientY + 'px';
+        menu.style.left = e.clientX + 'px';
+        menu.style.background = '#fff';
+        menu.style.border = '1px solid #888';
+        menu.style.borderRadius = '6px';
+        menu.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+        menu.style.zIndex = 10000;
+        menu.style.padding = '0.5rem 0';
+        menu.style.minWidth = '120px';
+        menu.innerHTML = '<div style="padding:8px 16px;cursor:pointer;">Delete All Timesheets</div>';
+        menu.firstChild.onmouseover = () => menu.firstChild.style.background = '#eee';
+        menu.firstChild.onmouseout = () => menu.firstChild.style.background = '';
+        menu.firstChild.onclick = async () => {
+          removeMenu();
+          if (!confirm('Delete ALL timesheets for this user? This cannot be undone.')) return;
+          // Get userId from tr's data-uid attribute
+          const trEl = e.target.closest('tr');
+          const userId = trEl ? trEl.getAttribute('data-uid') : null;
+          if (!userId) {
+            alert('Could not determine user ID for deletion.');
+            return;
+          }
+          // Delete all timesheets for this user
+          const q = await getDocs(query(collection(db, 'timesheets'), where('userId', '==', userId)));
+          const batch = [];
+          q.forEach(docSnap => {
+            batch.push(updateDoc(doc(db, 'timesheets', docSnap.id), { adminDeleted: true }));
+          });
+          await Promise.all(batch);
+          alert('All timesheets for this user have been deleted.');
+          loadAdminData();
+        };
+        document.body.appendChild(menu);
+        setTimeout(() => {
+          document.addEventListener('click', removeMenu);
+          document.addEventListener('scroll', removeMenu, true);
+        }, 0);
+      };
+    });
+  });
+}
+
+// Patch loadAdminData to build a name->userId map for context menu
+const _origLoadAdminData = loadAdminData;
+loadAdminData = async function() {
+  await _origLoadAdminData.apply(this, arguments);
+  // Build a map of userName -> userId for context menu
+  window._adminUserIdMap = {};
+  // Pending
+  const pendingTable = document.getElementById('admin-users-tbody');
+  if (pendingTable) {
+    Array.from(pendingTable.querySelectorAll('tr')).forEach(tr => {
+      const nameTd = tr.querySelector('td');
+      const userName = nameTd ? nameTd.textContent.replace(/^[*\s]+/, '').trim() : '';
+      const actionBtn = tr.querySelector('button');
+      if (actionBtn && actionBtn.onclick) {
+        // Try to extract userId from the onclick closure (hacky, but works for now)
+        // Instead, patch showAdminUserTimesheets to add data-uid attr to tr
+      }
+    });
+  }
+  // Approved
+  const approvedTable = document.getElementById('admin-approved-tbody');
+  if (approvedTable) {
+    Array.from(approvedTable.querySelectorAll('tr')).forEach(tr => {
+      const nameTd = tr.querySelector('td');
+      const userName = nameTd ? nameTd.textContent.replace(/^[*\s]+/, '').trim() : '';
+    });
+  }
+  addAdminUserContextMenu();
+};
+// Patch admin table row creation to add data-uid attribute
+// In loadAdminData, when building each tr for pending/approved, add tr.setAttribute('data-uid', uid);
