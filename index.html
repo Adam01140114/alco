@@ -204,7 +204,7 @@
       margin-top: 1.5rem;
     }
 
-    /* “Pay Period Start Date” label bigger */
+    /* "Pay Period Start Date" label bigger */
     .start-date-container {
       margin-top: 1rem;
       display: inline-flex;
@@ -1623,7 +1623,7 @@ function getCombinedJobs() {
         tw.appendChild(t);
         detailsDiv.appendChild(tw);
     
-        // “View” button
+        // "View" button
         const bGroup = document.createElement('div');
         bGroup.classList.add('inline-button-group');
     
@@ -1967,6 +1967,14 @@ function getCombinedJobs() {
           });
           btnGroup.appendChild(delBtn);
         } else {
+          // Add Print button for pending timesheets
+          const printBtn = document.createElement('button');
+          printBtn.textContent = "Print";
+          printBtn.addEventListener('click', () => {
+            printOrExportTimesheet(ts, true);
+          });
+          btnGroup.appendChild(printBtn);
+
           const approveBtn = document.createElement('button');
           approveBtn.textContent = "Approve";
           approveBtn.addEventListener('click', async () => {
