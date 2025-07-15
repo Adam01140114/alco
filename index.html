@@ -40,7 +40,7 @@
     }
     .container {
       width: 95%;
-      max-width: 1200px;
+      max-width: 1500px;
       background: #fff;
       margin: 2rem auto;
       padding: 2rem;
@@ -389,6 +389,21 @@
     
     
   </style>
+  <style>
+    th[data-label="On Call Hours"], td[data-label="On Call Hours"], th.on-call-hours, td.on-call-hours {
+      min-width: 220px !important;
+      width: 220px !important;
+      max-width: 240px;
+      white-space: nowrap;
+    }
+    /* Force On Call Hours column to be wide and text to stay on one line */
+    th:nth-child(6), td:nth-child(6) {
+      min-width: 200px !important;
+      width: 200px !important;
+      max-width: 250px;
+      white-space: nowrap !important;
+    }
+  </style>
 </head>
 <body>
   <header><br>
@@ -467,7 +482,7 @@
           <button id="cancel-timesheet-btn">Cancel</button>
         </div>
       </div>
-      <br>
+      
       <h3>Past Timesheets</h3>
       <div id="past-timesheets"></div>
       <div class="logout-btn-container">

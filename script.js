@@ -14,7 +14,9 @@
           start2: row.querySelector('input[name="start2"]').value, // Changed from start2
           end2: row.querySelector('input[name="end2"]').value,     // Changed from end2
           job: row.querySelector('select[name="jobDescription"]').value,
-          comment: row.querySelector('input[name="comment"]').value
+          comment: row.querySelector('input[name="comment"]').value,
+          // NEW: keep any sessions attached to the row
+          onCallSessions: row.onCallSessions || []
       };
   });
 
@@ -142,7 +144,8 @@
     query,
     where,
     serverTimestamp,
-    updateDoc
+    updateDoc,
+    deleteField
   } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
   
   const firebaseConfig = {
@@ -634,55 +637,60 @@ saveTimesheetDraft();
 
   
   /** Export PDF (20px corners + smaller font) */
+/* ---------- Export PDF (includes On Call hours) ---------- */
 exportTimesheetBtn.addEventListener("click", () => {
-const sv = timesheetStartInput.value || "";
-if (!sv) {
-  alert("Please choose a start date first.");
-  return;
-}
+  if (!timesheetStartInput.value) {
+    alert("Please choose a start date first.");
+    return;
+  }
 
-const daysToAdd = workSchedule === "weekly" ? 6 : 13;
-const sObj = parseLocalDate(sv);
-const eObj = new Date(sObj);
-eObj.setDate(eObj.getDate() + daysToAdd);
+  const daysToAdd = workSchedule === "weekly" ? 6 : 13;
+  const sObj = parseLocalDate(timesheetStartInput.value);
+  const eObj = new Date(sObj);
+  eObj.setDate(eObj.getDate() + daysToAdd);
+  const endIso = `${eObj.getFullYear()}-${String(eObj.getMonth() + 1).padStart(2, "0")}-${String(eObj.getDate()).padStart(2, "0")}`;
 
-const eY = eObj.getFullYear();
-const eM = String(eObj.getMonth() + 1).padStart(2, '0');
-const eD = String(eObj.getDate()).padStart(2, '0');
-const endIso = `${eY}-${eM}-${eD}`;
+  const entries = [];
+  timesheetFormDiv.querySelectorAll(".timesheet-row").forEach(row => {
+    const dt  = row.getAttribute("data-date");
+    const st1 = row.querySelector('input[name="start1"]').value.trim() || " ";
+    const et1 = row.querySelector('input[name="end1"]').value.trim()   || " ";
+    const st2 = row.querySelector('input[name="start2"]').value.trim() || " ";
+    const et2 = row.querySelector('input[name="end2"]').value.trim()   || " ";
 
-let entries = [];
-const rows = timesheetFormDiv.querySelectorAll(".timesheet-row");
-rows.forEach((r) => {
- const dt = r.getAttribute("data-date");
- const st1 = r.querySelector('input[name="start1"]').value.trim() || " ";
-const et1 = r.querySelector('input[name="end1"]').value.trim() || " ";
-const st2 = r.querySelector('input[name="start2"]').value.trim() || " ";
-const et2 = r.querySelector('input[name="end2"]').value.trim() || " ";
+    const job = row.querySelector('select[name="jobDescription"]').value.trim() || " ";
+    const cmt = row.querySelector('input[name="comment"]').value.trim()          || " ";
 
-  const jv = r.querySelector('select[name="jobDescription"]').value.trim() || " ";
-  const cVal = r.querySelector('input[name="comment"]').value.trim() || " ";
+    /* NEW: grab any on‑call sessions already attached to the row */
+    const onCallSessions = Array.isArray(row.onCallSessions) ? row.onCallSessions : [];
 
-  const hrs = calculateHours(st1, et1) + calculateHours(st2, et2);
-  entries.push({
-    date: dt,
-    start1: st1,
-    end1: et1,
-    start2: st2,
-    end2: et2,
-    jobDescription: jv,
-    comment: cVal,
-    totalHours: hrs,
+    /* NEW: include on‑call time in total hours */
+    const totalHours =
+      calculateHours(st1, et1) +
+      calculateHours(st2, et2) +
+      calculateOnCallSessionsHours(onCallSessions);
+
+    entries.push({
+      date: dt,
+      start1: st1,
+      end1: et1,
+      start2: st2,
+      end2: et2,
+      onCallSessions,       // keep the array
+      jobDescription: job,
+      comment: cmt,
+      totalHours
+    });
+  });
+
+  printOrExportTimesheet({
+    userName: currentUserName,
+    startDate: timesheetStartInput.value,
+    endDate: endIso,
+    entries
   });
 });
 
-printOrExportTimesheet({
-  userName: currentUserName,
-  startDate: sv,
-  endDate: endIso,
-  entries,
-});
-});
 
 
 
@@ -715,7 +723,13 @@ rows.forEach(r => {
   const et2 = r.querySelector('input[name="end2"]').value.trim() || " ";
   const jb = r.querySelector('select[name="jobDescription"]').value.trim() || " ";
   const cm = r.querySelector('input[name="comment"]').value.trim() || " ";
-  const hrs = calculateHours(st1, et1) + calculateHours(st2, et2);
+  // Get onCallSessions from draft if present
+  let onCallSessions = [];
+  const draft = JSON.parse(localStorage.getItem('timesheetDraft'));
+  if (draft && draft.entries && draft.entries[dt] && Array.isArray(draft.entries[dt].onCallSessions)) {
+    onCallSessions = draft.entries[dt].onCallSessions;
+  }
+  const hrs = calculateHours(st1, et1) + calculateHours(st2, et2) + calculateOnCallSessionsHours(onCallSessions);
   entries.push({
     date: dt,
     start1: st1,
@@ -724,6 +738,7 @@ rows.forEach(r => {
     end2: et2,
     jobDescription: jb,
     comment: cm,
+    onCallSessions,
     totalHours: hrs
   });
 });
@@ -785,9 +800,13 @@ async function renderTimesheetForm(existingDraft) {
 
   const thead = document.createElement('thead');
   const thr = document.createElement('tr');
-  ["Date","Start Time:","End Time:","Start Time:","End Time:","Job Description:","Comment:"].forEach(txt => {
+  ["Date","Start Time:","End Time:","Start Time:","End Time:","On Call Hours","Job Description:","Comment:"].forEach((txt, idx) => {
       const th = document.createElement('th');
       th.textContent = txt;
+      if (txt === 'On Call Hours') {
+        th.style.minWidth = '150px';
+        th.style.width = '150px';
+      }
       thr.appendChild(th);
   });
   thead.appendChild(thr);
@@ -804,11 +823,14 @@ async function renderTimesheetForm(existingDraft) {
       cur.setDate(cur.getDate() + i);
       const yyyy = cur.getFullYear();
       const mm = String(cur.getMonth() + 1).padStart(2, '0');
-      const dd = String(cur.getDate()).padStart(2, '0');
+      const dd = String(cur.getDate() + '').padStart(2, '0');
       const iso = `${yyyy}-${mm}-${dd}`;
       row.setAttribute('data-date', iso);
 
       const draftData = draftEntries[iso] || {};
+      // Ensure onCallSessions is always an array
+      if (!Array.isArray(draftData.onCallSessions)) draftData.onCallSessions = [];
+      row.onCallSessions = draftData.onCallSessions; // keep a live copy
 
       const wdShort = cur.toLocaleDateString('en-US', { weekday: 'short' });
       const dtShort = cur.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
@@ -824,7 +846,7 @@ async function renderTimesheetForm(existingDraft) {
           return input;
       };
 
-      // Inside your renderTimesheetForm function where you create time cells
+      // Start/End time cells
 const st1Td = document.createElement('td');
 st1Td.setAttribute('data-label', 'Start Time');
 st1Td.appendChild(createTimeInput('start1'));
@@ -841,13 +863,90 @@ const et2Td = document.createElement('td');
 et2Td.setAttribute('data-label', 'End Time');
 et2Td.appendChild(createTimeInput('end2'));
 
+      // On Call Hours cell
+      const onCallTd = document.createElement('td');
+      onCallTd.setAttribute('data-label', 'On Call Hours');
+      onCallTd.style.textAlign = 'center';
+      onCallTd.style.minWidth = '150px';
+      onCallTd.style.width = '150px';
+      // UI for on call entry
+      let onCallUI = null;
+      function renderOnCallUI() {
+        if (onCallUI) onCallTd.removeChild(onCallUI);
+        onCallUI = document.createElement('div');
+        onCallUI.style.marginBottom = '0.5rem';
+        // List all on call sessions
+        if (row.onCallSessions && row.onCallSessions.length > 0) {
+          row.onCallSessions.forEach((sess, idx) => {
+            const sessDiv = document.createElement('div');
+            sessDiv.textContent = `${formatTime24ToAmPm(sess.start)} - ${formatTime24ToAmPm(sess.end)}`;
+            onCallUI.appendChild(sessDiv);
+          });
+        }
+        onCallTd.insertBefore(onCallUI, onCallTd.firstChild);
+      }
+      function showOnCallInputs() {
+        if (onCallUI) onCallTd.removeChild(onCallUI);
+        onCallUI = document.createElement('div');
+        onCallUI.style.marginBottom = '0.5rem';
+        const startDiv = document.createElement('div');
+        startDiv.style.marginBottom = '0.25rem';
+        const startLabel = document.createElement('label');
+        startLabel.textContent = 'Start:';
+        startLabel.style.marginRight = '0.5rem';
+        const startInput = document.createElement('input');
+        startInput.type = 'time';
+        startInput.value = '';
+        startDiv.appendChild(startLabel);
+        startDiv.appendChild(startInput);
+
+        const endDiv = document.createElement('div');
+        endDiv.style.marginBottom = '0.25rem';
+        const endLabel = document.createElement('label');
+        endLabel.textContent = 'End:';
+        endLabel.style.marginRight = '0.5rem';
+        const endInput = document.createElement('input');
+        endInput.type = 'time';
+        endInput.value = '';
+        endDiv.appendChild(endLabel);
+        endDiv.appendChild(endInput);
+
+        const saveBtn = document.createElement('button');
+        saveBtn.textContent = 'Save';
+        saveBtn.style.display = 'block';
+        saveBtn.style.marginTop = '0.25rem';
+        saveBtn.style.marginLeft = 'auto';
+        saveBtn.style.marginRight = 'auto';
+        saveBtn.onclick = () => {
+          if (startInput.value && endInput.value) {
+            const sess = { start: startInput.value, end: endInput.value };
+            draftData.onCallSessions.push(sess);
+            row.onCallSessions = draftData.onCallSessions; // sync row copy
+            saveTimesheetDraft();
+            renderOnCallUI();
+          }
+        };
+
+        onCallUI.appendChild(startDiv);
+        onCallUI.appendChild(endDiv);
+        onCallUI.appendChild(saveBtn);
+        onCallTd.insertBefore(onCallUI, onCallTd.firstChild);
+      }
+      // Add On Call button
+      const addOnCallBtn = document.createElement('button');
+      addOnCallBtn.textContent = 'Add On Call';
+      addOnCallBtn.onclick = showOnCallInputs;
+      onCallTd.appendChild(addOnCallBtn);
+      // Render UI if already set
+      if (row.onCallSessions && row.onCallSessions.length > 0) renderOnCallUI();
+
       const jobSelect = document.createElement('select');
       jobSelect.name = 'jobDescription';
       jobSelect.addEventListener('change', saveTimesheetDraft);
       
       const emptyOption = document.createElement('option');
       emptyOption.value = "";
-      emptyOption.textContent = "(Select a job)";
+      emptyOption.textContent = "(Select Job)";
       emptyOption.selected = !draftData.job;
       jobSelect.appendChild(emptyOption);
       
@@ -876,6 +975,7 @@ et2Td.appendChild(createTimeInput('end2'));
       row.appendChild(et1Td);
       row.appendChild(st2Td);
       row.appendChild(et2Td);
+      row.appendChild(onCallTd);
       row.appendChild(jobTd);
       row.appendChild(commentTd);
 
@@ -938,175 +1038,478 @@ return [...defaultJobs, ...userCustomJobs].sort((a, b) => a.localeCompare(b));
   /*************************
    * Load user timesheets (Past)
    *************************/
+ /*************************
+ * Load user timesheets (Past + Contested)
+   *************************/
   async function loadUserTimesheets() {
     if (!currentUser) return;
-    const qSnap = await getDocs(query(collection(db, 'timesheets'), where('userId', '==', currentUser.uid)));
+
+  // Pull every timesheet that still belongs to the user
+  const qSnap = await getDocs(
+    query(collection(db, "timesheets"), where("userId", "==", currentUser.uid))
+  );
+
     pastTimesheetsDiv.innerHTML = "";
-    if (qSnap.empty) {
-      pastTimesheetsDiv.textContent = "You currently have no timesheets.";
-      return;
-    }
-    let docsArr = [];
-    qSnap.forEach(s => {
+  let contestedArr = [];
+  let normalArr = [];
+
+  if (!qSnap.empty) {
+    qSnap.forEach((s) => {
       const d = s.data();
       if (d.userDeleted !== true) {
-        docsArr.push({ id: s.id, ...d });
+        if (d.contested === true) {
+          contestedArr.push({ id: s.id, ...d });
+        } else {
+          normalArr.push({ id: s.id, ...d });
+        }
       }
     });
-    if (docsArr.length === 0) {
+  }
+
+  // Newest first
+  contestedArr.sort((a, b) => b.startDate.localeCompare(a.startDate));
+  normalArr.sort((a, b) => b.startDate.localeCompare(a.startDate));
+
+  /* ------------ contested section ------------ */
+  let contestedSection = document.getElementById("contested-timesheets-div");
+  const pastHeading = pastTimesheetsDiv.previousElementSibling; // <h3>Past Timesheets</h3>
+
+  // Only create the wrapper once
+  if (!contestedSection) {
+    contestedSection = document.createElement("div");
+    contestedSection.id = "contested-timesheets-div";
+    // Insert right before the Past Timesheets heading
+    pastHeading.parentNode.insertBefore(contestedSection, pastHeading);
+  }
+  contestedSection.innerHTML = "";
+
+  if (contestedArr.length > 0) {
+    const heading = document.createElement("h3");
+    heading.textContent = "Contested Timesheets";
+    contestedSection.appendChild(heading);
+
+    contestedArr.forEach((ts) => {
+      contestedSection.appendChild(buildTimesheetCard(ts, true));
+    });
+  }
+
+  /* ------------ past (normal) section ------------ */
+  pastTimesheetsDiv.innerHTML = "";
+  if (normalArr.length === 0) {
       pastTimesheetsDiv.textContent = "You currently have no timesheets.";
+  } else {
+    normalArr.forEach((ts) => {
+      pastTimesheetsDiv.appendChild(buildTimesheetCard(ts, false));
+    });
+  }
+}
+
+/* helper that returns the DOM node for a single timesheet
+   keep the second parameter "isContested" just for styling later */
+function buildTimesheetCard(ts, isContested) {
+  const item = document.createElement("div");
+  item.classList.add("timesheet-item");
+
+  const head = document.createElement("div");
+  head.classList.add("timesheet-item-header");
+  head.innerHTML =
+    (isContested ? '<span style="color:red">*</span> ' : "") +
+    `Timesheet<br>${ts.startDate} - ${ts.endDate}`;
+  item.appendChild(head);
+
+  // If contested and has admin comment, show it in a styled box
+  let adminCommentBox = null;
+  if (isContested && ts.adminEditComment) {
+    adminCommentBox = document.createElement("div");
+    adminCommentBox.style.background = "#f7f7f7";
+    adminCommentBox.style.border = "1px solid #bbb";
+    adminCommentBox.style.borderRadius = "8px";
+    adminCommentBox.style.padding = "1rem";
+    adminCommentBox.style.margin = "1rem 0";
+    adminCommentBox.style.fontSize = "1.1rem";
+    adminCommentBox.style.color = "#333";
+    adminCommentBox.textContent = ts.adminEditComment;
+    item.appendChild(adminCommentBox);
+  }
+
+  const details = document.createElement("div");
+  details.classList.add("timesheet-details", "hidden", "user-view");
+
+  // For contested timesheets, allow editing
+  let edited = false;
+  let editedEntries = JSON.parse(JSON.stringify(ts.entries));
+  let contestCommentBox = null;
+  let contestCommentWrapper = null;
+  let contestBtn = null;
+  let approveBtn = null;
+  let updateContestUI = () => {};
+
+  // buildTimesheetTable: editable for contested, else not
+  if (isContested) {
+    // Define updateContestUI in this scope so it can be used in onEdit
+    updateContestUI = function() {
+      if (approveBtn) approveBtn.style.display = edited ? "none" : "";
+      if (contestBtn) contestBtn.style.display = edited ? "" : "none";
+      if (contestCommentWrapper) contestCommentWrapper.style.display = edited ? "block" : "none";
+    };
+    details.appendChild(buildEditableTimesheetTable(ts.entries, editedEntries, function() {
+      edited = true;
+      updateContestUI();
+    }));
+  } else {
+    details.appendChild(buildTimesheetTable(ts.entries));
+  }
+
+  // Button group
+  const btnWrap = document.createElement("div");
+  btnWrap.classList.add("inline-button-group");
+  const viewBtn = document.createElement("button");
+  viewBtn.textContent = "View";
+  viewBtn.onclick = () => {
+    details.classList.toggle("hidden");
+    viewBtn.textContent = details.classList.contains("hidden") ? "View" : "Back";
+    // When opening, update UI in case edits were made
+    if (isContested) updateContestUI();
+  };
+  btnWrap.appendChild(viewBtn);
+
+  // Add Delete button for non-contested (past) timesheets only
+  if (!isContested) {
+    const deleteBtn = document.createElement("button");
+    deleteBtn.textContent = "Delete";
+    deleteBtn.style.marginLeft = "0.5rem";
+    deleteBtn.onclick = async () => {
+      if (!confirm("Delete this timesheet from your view?")) return;
+      await updateDoc(doc(db, "timesheets", ts.id), { userDeleted: true });
+      loadUserTimesheets();
+    };
+    btnWrap.appendChild(deleteBtn);
+  }
+
+  // Approve/Contest logic for contested timesheets
+  if (isContested) {
+    // Approve button (default)
+    approveBtn = document.createElement("button");
+    approveBtn.textContent = "Approve";
+    approveBtn.style.marginLeft = "0.5rem";
+    approveBtn.onclick = async () => {
+      await updateDoc(doc(db, "timesheets", ts.id), {
+        contested: false,
+        adminEditComment: deleteField()
+      });
+      loadUserTimesheets();
+    };
+    btnWrap.appendChild(approveBtn);
+
+    // Contest button (hidden by default)
+    contestBtn = document.createElement("button");
+    contestBtn.textContent = "Contest";
+    contestBtn.style.marginLeft = "0.5rem";
+    contestBtn.style.display = "none";
+    contestBtn.onclick = async () => {
+      if (!contestCommentBox.value.trim()) {
+        contestCommentBox.focus();
+        contestCommentBox.style.borderColor = "red";
+        contestCommentBox.placeholder = "Please enter a comment before contesting.";
       return;
     }
-    docsArr.sort((a, b) => b.startDate.localeCompare(a.startDate));
-  
-    docsArr.forEach(ts => {
-      const item = document.createElement('div');
-      item.classList.add('timesheet-item');
-  
-      const headDiv = document.createElement('div');
-      headDiv.classList.add('timesheet-item-header');
-      headDiv.innerHTML = "Timesheet<br>" + ts.startDate + " - " + ts.endDate;
-  
-      const detailsDiv = document.createElement('div');
-      detailsDiv.classList.add('timesheet-details', 'hidden', 'user-view');
-  
-      const tw = document.createElement('div');
-      tw.classList.add('table-wrapper');
-  
-      const t = document.createElement('table');
-      t.style.tableLayout = 'fixed';
-      t.style.borderRadius = '20px';
-      t.style.overflow = 'hidden';
-  
-      const thead = document.createElement('thead');
-      const thr = document.createElement('tr');
-      ["Date", "Start", "End", "Start", "End", "Job", "Comment", "Total Hrs"].forEach(tx => {
-        const th = document.createElement('th');
+      await updateDoc(doc(db, "timesheets", ts.id), {
+        entries: editedEntries,
+        contested: true,
+        adminEditComment: contestCommentBox.value.trim()
+      });
+      details.classList.add("hidden");
+      viewBtn.textContent = "View";
+      loadUserTimesheets();
+    };
+    btnWrap.appendChild(contestBtn);
+
+    // Contest comment box (hidden by default)
+    contestCommentWrapper = document.createElement("div");
+    contestCommentWrapper.style.display = "none";
+    contestCommentWrapper.style.margin = "1rem 0";
+    contestCommentWrapper.style.width = "100%";
+    contestCommentWrapper.style.textAlign = "center";
+    contestCommentBox = document.createElement("textarea");
+    contestCommentBox.rows = 4;
+    contestCommentBox.style.width = "90%";
+    contestCommentBox.style.maxWidth = "600px";
+    contestCommentBox.style.fontSize = "1.1rem";
+    contestCommentBox.style.padding = "0.5rem";
+    contestCommentBox.style.border = "1px solid #ccc";
+    contestCommentBox.style.borderRadius = "8px";
+    contestCommentBox.placeholder = "Enter contest comments here";
+    contestCommentWrapper.appendChild(contestCommentBox);
+    details.appendChild(contestCommentWrapper);
+
+    // Initial UI state
+    updateContestUI();
+  }
+
+  item.appendChild(details);
+  item.appendChild(btnWrap);
+
+  return item;
+}
+
+// Helper: editable table for user contesting
+function buildEditableTimesheetTable(entries, editedEntries, onEdit) {
+  const tw = document.createElement("div");
+  tw.classList.add("table-wrapper");
+
+  const t = document.createElement("table");
+  t.style.tableLayout = "fixed";
+  t.style.borderRadius = "20px";
+  t.style.overflow = "hidden";
+
+  const thead = document.createElement("thead");
+  const thr = document.createElement("tr");
+  ["Date", "Start", "End", "Start", "End", "Job", "Comment", "Total Hrs"].forEach((tx) => {
+    const th = document.createElement("th");
         th.textContent = tx;
-        th.style.whiteSpace = 'normal';
-        th.style.wordWrap = 'break-word';
         thr.appendChild(th);
       });
       thead.appendChild(thr);
       t.appendChild(thead);
   
-      const tb = document.createElement('tbody');
-      ts.entries.forEach((e, idx) => {
+  const tbody = document.createElement("tbody");
+  entries.forEach((e, idx) => {
         if (idx === 7) {
-          const sr = document.createElement('tr');
-          sr.classList.add('spacer-row');
-          const sc = document.createElement('td');
-          sc.colSpan = 8;
-          sr.appendChild(sc);
-          tb.appendChild(sr);
-        }
-        const row = document.createElement('tr');
-        const dateObj = new Date(e.date + "T12:00:00");
-        const wdShort = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
-        const dtShort = dateObj.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
-        const dateHtml = `${wdShort}<br>(${dtShort})`;
-  
-        const dCell = document.createElement('td');
-        dCell.innerHTML = dateHtml;
-        dCell.style.whiteSpace = 'normal';
-        dCell.style.wordWrap = 'break-word';
-  
-        const st1Cell = document.createElement('td');
-        st1Cell.textContent = formatTime24ToAmPm(e.start1 === " " ? "" : e.start1);
-        st1Cell.style.whiteSpace = 'normal';
-  
-        const et1Cell = document.createElement('td');
-        et1Cell.textContent = formatTime24ToAmPm(e.end1 === " " ? "" : e.end1);
-  
-        const st2Cell = document.createElement('td');
-        st2Cell.textContent = formatTime24ToAmPm(e.start2 === " " ? "" : e.start2);
-  
-        const et2Cell = document.createElement('td');
-        et2Cell.textContent = formatTime24ToAmPm(e.end2 === " " ? "" : e.end2);
-  
-        const jobCell = document.createElement('td');
-        jobCell.textContent = (e.jobDescription === " ") ? " " : e.jobDescription;
-        jobCell.style.whiteSpace = 'normal';
-  
-        const cCell = document.createElement('td');
-        cCell.textContent = (e.comment === " ") ? " " : e.comment;
-        cCell.style.whiteSpace = 'normal';
-  
-        const hrsCell = document.createElement('td');
-        const hv = isNaN(e.totalHours) ? 0 : e.totalHours;
-        hrsCell.textContent = hv.toFixed(2);
-  
-        row.appendChild(dCell);
-        row.appendChild(st1Cell);
-        row.appendChild(et1Cell);
-        row.appendChild(st2Cell);
-        row.appendChild(et2Cell);
-        row.appendChild(jobCell);
-        row.appendChild(cCell);
-        row.appendChild(hrsCell);
-        tb.appendChild(row);
-      });
-      t.appendChild(tb);
-      tw.appendChild(t);
-      detailsDiv.appendChild(tw);
-  
-      // "View" button
-      const bGroup = document.createElement('div');
-      bGroup.classList.add('inline-button-group');
-  
-      const viewBtn = document.createElement('button');
-      viewBtn.textContent = "View";
-      viewBtn.addEventListener('click', () => {
-        if (detailsDiv.classList.contains('hidden')) {
-          detailsDiv.classList.remove('hidden');
-          viewBtn.textContent = "Back";
-        } else {
-          detailsDiv.classList.add('hidden');
-          viewBtn.textContent = "View";
-        }
-      });
-      bGroup.appendChild(viewBtn);
-  
-      item.appendChild(headDiv);
-      item.appendChild(detailsDiv);
-      item.appendChild(bGroup);
-      pastTimesheetsDiv.appendChild(item);
-  
-      // Vertical container for Unsubmit/Delete buttons
-      const vertContainer = document.createElement('div');
-      vertContainer.style.display = "flex";
-      vertContainer.style.flexDirection = "column";
-      vertContainer.style.alignItems = "center";
-      vertContainer.style.gap = "0.5rem";
-      vertContainer.style.marginTop = "1rem";
-  
-      // Unsubmit => sets userDeleted so user won't see it
-      if (!ts.approved && !ts.unsubmitted) {
-        const unsubmitBtn = document.createElement('button');
-        unsubmitBtn.textContent = "Unsubmit";
-        vertContainer.appendChild(unsubmitBtn);
-        unsubmitBtn.addEventListener('click', async () => {
-          if (!confirm("Unsubmit this timesheet?")) return;
-          await updateDoc(doc(db, 'timesheets', ts.id), {
-            unsubmitted: true,
-            userDeleted: true
-          });
-          loadUserTimesheets();
-        });
-      }
-  
-      // Delete button
-      const deleteBtn = document.createElement('button');
-      deleteBtn.textContent = "Delete";
-      vertContainer.appendChild(deleteBtn);
-      deleteBtn.addEventListener('click', async () => {
-        if (!confirm("Delete this timesheet from your view?")) return;
-        await updateDoc(doc(db, 'timesheets', ts.id), { userDeleted: true });
-        loadUserTimesheets();
-      });
-  
-      detailsDiv.appendChild(vertContainer);
+      const spacer = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = 8;
+      spacer.appendChild(td);
+      tbody.appendChild(spacer);
+    }
+    const row = document.createElement("tr");
+    const dObj = new Date(e.date + "T12:00:00");
+    const dateCell = document.createElement("td");
+    dateCell.innerHTML =
+      `${dObj.toLocaleDateString("en-US", { weekday: "short" })}<br>` +
+      `(${dObj.toLocaleDateString("en-US", {
+        month: "2-digit",
+        day: "2-digit",
+        year: "2-digit",
+      })})`;
+    row.appendChild(dateCell);
+
+    // Editable time fields
+    ["start1", "end1", "start2", "end2"].forEach((k) => {
+      const td = document.createElement("td");
+      const span = document.createElement("span");
+      span.textContent = formatTime24ToAmPm(e[k] === " " ? "" : e[k]);
+      span.style.cursor = "pointer";
+      span.ondblclick = function () {
+        const input = document.createElement("input");
+        input.type = "time";
+        input.value = e[k] && e[k] !== " " ? e[k] : "";
+        input.onblur = function () {
+          const newVal = input.value;
+          span.textContent = formatTime24ToAmPm(newVal);
+          td.replaceChild(span, input);
+          if (newVal !== e[k]) {
+            editedEntries[idx][k] = newVal;
+            // recalc total hours
+            editedEntries[idx].totalHours =
+              calculateHours(editedEntries[idx].start1, editedEntries[idx].end1) +
+              calculateHours(editedEntries[idx].start2, editedEntries[idx].end2);
+            onEdit();
+          }
+        };
+        input.onkeydown = function (ev) {
+          if (ev.key === "Enter") input.blur();
+        };
+        td.replaceChild(input, span);
+        input.focus();
+      };
+      td.appendChild(span);
+      row.appendChild(td);
     });
+
+    // Editable job select
+    const jobCell = document.createElement("td");
+    const jobSpan = document.createElement("span");
+    jobSpan.textContent = e.jobDescription === " " ? " " : e.jobDescription;
+    jobSpan.style.cursor = "pointer";
+    jobSpan.ondblclick = function () {
+      const select = document.createElement("select");
+      const jobs = getCombinedJobs();
+      const emptyOpt = document.createElement("option");
+      emptyOpt.value = "";
+      emptyOpt.textContent = "(Select a job)";
+      select.appendChild(emptyOpt);
+      jobs.forEach((j) => {
+        const opt = document.createElement("option");
+        opt.value = j;
+        opt.textContent = j;
+        if (j === e.jobDescription) opt.selected = true;
+        select.appendChild(opt);
+      });
+      select.onblur = function () {
+        const newVal = select.value;
+        jobSpan.textContent = newVal;
+        jobCell.replaceChild(jobSpan, select);
+        if (newVal !== e.jobDescription) {
+          editedEntries[idx].jobDescription = newVal;
+          onEdit();
+        }
+      };
+      select.onkeydown = function (ev) {
+        if (ev.key === "Enter") select.blur();
+      };
+      jobCell.replaceChild(select, jobSpan);
+      select.focus();
+    };
+    jobCell.appendChild(jobSpan);
+    row.appendChild(jobCell);
+
+    // Editable comment
+    const cmtCell = document.createElement("td");
+    const cmtSpan = document.createElement("span");
+    cmtSpan.textContent = e.comment === " " ? " " : e.comment;
+    cmtSpan.style.cursor = "pointer";
+    cmtSpan.ondblclick = function () {
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = e.comment && e.comment !== " " ? e.comment : "";
+      input.onblur = function () {
+        const newVal = input.value;
+        cmtSpan.textContent = newVal;
+        cmtCell.replaceChild(cmtSpan, input);
+        if (newVal !== e.comment) {
+          editedEntries[idx].comment = newVal;
+          onEdit();
+        }
+      };
+      input.onkeydown = function (ev) {
+        if (ev.key === "Enter") input.blur();
+      };
+      cmtCell.replaceChild(input, cmtSpan);
+      input.focus();
+    };
+    cmtCell.appendChild(cmtSpan);
+    row.appendChild(cmtCell);
+
+    // Total hours
+    const hrsCell = document.createElement("td");
+    hrsCell.textContent = (isNaN(e.totalHours) ? 0 : e.totalHours).toFixed(2);
+    row.appendChild(hrsCell);
+
+    tbody.appendChild(row);
+  });
+
+  t.appendChild(tbody);
+  tw.appendChild(t);
+  return tw;
+}
+
+// Helper to calculate on call hours for a list of sessions
+function calculateOnCallSessionsHours(sessions) {
+  if (!Array.isArray(sessions)) return 0;
+  let total = 0;
+  sessions.forEach(sess => {
+    if (sess && sess.start && sess.end) {
+      const [sh, sm] = sess.start.split(':').map(Number);
+      const [eh, em] = sess.end.split(':').map(Number);
+      const sTot = sh * 60 + sm;
+      const eTot = eh * 60 + em;
+      if (eTot > sTot) total += (eTot - sTot) / 60;
+    }
+  });
+  return total;
+}
+
+// Update buildTimesheetTable to show On Call Hours and include in total
+function buildTimesheetTable(entries) {
+  const tw = document.createElement("div");
+  tw.classList.add("table-wrapper");
+
+  const t = document.createElement("table");
+  t.style.tableLayout = "fixed";
+  t.style.borderRadius = "20px";
+  t.style.overflow = "hidden";
+
+  const thead = document.createElement("thead");
+  const thr = document.createElement("tr");
+  ["Date", "Start", "End", "Start", "End", "On Call Hours", "Job", "Comment", "Total Hrs"].forEach(
+    (tx) => {
+      const th = document.createElement("th");
+      th.textContent = tx;
+      if (tx === 'On Call Hours') {
+        th.style.minWidth = '150px';
+        th.style.width = '150px';
+      }
+      thr.appendChild(th);
+    }
+  );
+  thead.appendChild(thr);
+  t.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  entries.forEach((e, idx) => {
+    if (idx === 7) {
+      const spacer = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = 9;
+      spacer.appendChild(td);
+      tbody.appendChild(spacer);
+    }
+
+    const row = document.createElement("tr");
+
+    const dObj = new Date(e.date + "T12:00:00");
+    const dateCell = document.createElement("td");
+    dateCell.innerHTML =
+      `${dObj.toLocaleDateString("en-US", { weekday: "short" })}<br>` +
+      `(${dObj.toLocaleDateString("en-US", {
+        month: "2-digit",
+        day: "2-digit",
+        year: "2-digit",
+      })})`;
+    row.appendChild(dateCell);
+
+    ["start1", "end1", "start2", "end2"].forEach((k) => {
+      const td = document.createElement("td");
+      td.textContent = formatTime24ToAmPm(e[k] === " " ? "" : e[k]);
+      row.appendChild(td);
+    });
+
+    // On Call Hours column
+    const onCallTd = document.createElement("td");
+    onCallTd.style.textAlign = 'center';
+    onCallTd.style.minWidth = '150px';
+    onCallTd.style.width = '150px';
+    if (Array.isArray(e.onCallSessions) && e.onCallSessions.length > 0) {
+      e.onCallSessions.forEach(sess => {
+        const sessDiv = document.createElement('div');
+        sessDiv.textContent = `${formatTime24ToAmPm(sess.start)} - ${formatTime24ToAmPm(sess.end)}`;
+        onCallTd.appendChild(sessDiv);
+      });
+    }
+    row.appendChild(onCallTd);
+
+    const jobCell = document.createElement("td");
+    jobCell.textContent = e.jobDescription === " " ? " " : e.jobDescription;
+    row.appendChild(jobCell);
+
+    const cmtCell = document.createElement("td");
+    cmtCell.textContent = e.comment === " " ? " " : e.comment;
+    row.appendChild(cmtCell);
+
+    // Total hours: sum of regular + on call
+    const hrsCell = document.createElement("td");
+    let totalHrs = (calculateHours(e.start1, e.end1) + calculateHours(e.start2, e.end2));
+    totalHrs += calculateOnCallSessionsHours(e.onCallSessions);
+    hrsCell.textContent = (isNaN(totalHrs) ? 0 : totalHrs).toFixed(2);
+    row.appendChild(hrsCell);
+
+    tbody.appendChild(row);
+  });
+
+  t.appendChild(tbody);
+  tw.appendChild(t);
+
+  return tw;
   }
   
   /*************************
@@ -1166,7 +1569,9 @@ return [...defaultJobs, ...userCustomJobs].sort((a, b) => a.localeCompare(b));
         const tr = document.createElement('tr');
         const nameTd = document.createElement('td');
         const userName = userMapPending[uid].userName;
-        nameTd.innerHTML = "<strong>" + userName + "</strong>";
+        // Check if any pending timesheet for this user is contested
+        const hasContested = userMapPending[uid].timesheets.some(ts => ts.contested === true);
+        nameTd.innerHTML = (hasContested ? '<span style="color:red">*</span> ' : '') + "<strong>" + userName + "</strong>";
         tr.appendChild(nameTd);
   
         const actionTd = document.createElement('td');
@@ -1246,73 +1651,220 @@ return [...defaultJobs, ...userCustomJobs].sort((a, b) => a.localeCompare(b));
     }
   }
   
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
   /*************************
    * ADMIN: show user timesheets
    *************************/
   function showAdminUserTimesheets(uid, userName, timesheets, isApprovedSection, containerEl) {
     containerEl.innerHTML = "";
-    containerEl.classList.remove('hidden');
+    containerEl.classList.remove("hidden");
   
     timesheets.sort((a, b) => b.startDate.localeCompare(a.startDate));
+  
     timesheets.forEach(ts => {
-      const card = document.createElement('div');
-      card.classList.add('timesheet-item');
-  
-      const hd = document.createElement('div');
-      hd.classList.add('timesheet-item-header');
-      // Add red asterisk if contested
-      let contested = ts.contested === true;
-      let displayName = userName;
-      if (!isApprovedSection && contested) {
-        displayName = '<span style="color:red">*</span> ' + displayName;
+      const card = document.createElement("div");
+      card.classList.add("timesheet-item");
+
+      /* ---------- header ---------- */
+      const header = document.createElement("div");
+      header.classList.add("timesheet-item-header");
+
+      const contested = ts.contested === true && !isApprovedSection;
+      header.innerHTML =
+        (contested ? '<span style="color:red">*</span> ' : "") +
+        `${userName}<br>(${ts.startDate} - ${ts.endDate})`;
+
+      // If this is a contested pending timesheet and has a comment, show it above the table
+      let adminCommentBox = null;
+      if (contested && ts.adminEditComment) {
+        adminCommentBox = document.createElement("div");
+        adminCommentBox.style.background = "#f7f7f7";
+        adminCommentBox.style.border = "1px solid #bbb";
+        adminCommentBox.style.borderRadius = "8px";
+        adminCommentBox.style.padding = "1rem";
+        adminCommentBox.style.margin = "1rem 0";
+        adminCommentBox.style.fontSize = "1.1rem";
+        adminCommentBox.style.color = "#333";
+        adminCommentBox.textContent = ts.adminEditComment;
       }
-      hd.innerHTML = displayName + "<br>(" + ts.startDate + " - " + ts.endDate + ")";
+      /* ---------- details wrapper ---------- */
+      const details = document.createElement("div");
+      details.classList.add("timesheet-details", "hidden", isApprovedSection ? "admin-view" : "admin-view");
   
-      const det = document.createElement('div');
-      det.classList.add('timesheet-details', 'hidden', 'admin-view');
+      /* ---------------------------------------------------
+         Everything below only runs for "Pending" timesheets.
+         --------------------------------------------------- */
+      let edited = false;          // track whether anything changed
+      let editedEntries = JSON.parse(JSON.stringify(ts.entries));
   
-      const tw = document.createElement('div');
-      tw.classList.add('table-wrapper');
-      const table = document.createElement('table');
-      table.style.tableLayout = 'fixed';
-      table.style.borderRadius = '20px';
-      table.style.overflow = 'hidden';
+      /* 1. Create the Approve / Contest button up front */
+      const approveBtn = document.createElement("button");
+      approveBtn.textContent = "Approve";
+
+      // Add Print button for pending section
+      const printBtn = document.createElement("button");
+      printBtn.textContent = "Print";
+      printBtn.onclick = () => printOrExportTimesheet(ts, true);
+
+      // Add comment box (hidden by default)
+      const commentBoxWrapper = document.createElement("div");
+      commentBoxWrapper.style.display = "none";
+      commentBoxWrapper.style.margin = "1rem 0";
+      commentBoxWrapper.style.width = "100%";
+      commentBoxWrapper.style.textAlign = "center";
+      const commentBox = document.createElement("textarea");
+      commentBox.rows = 4;
+      commentBox.style.width = "90%";
+      commentBox.style.maxWidth = "600px";
+      commentBox.style.fontSize = "1.1rem";
+      commentBox.style.padding = "0.5rem";
+      commentBox.style.border = "1px solid #ccc";
+      commentBox.style.borderRadius = "8px";
+      commentBox.placeholder = "Enter timesheet edit comments here";
+      commentBoxWrapper.appendChild(commentBox);
+
+      // Show comment box if any edit is made
+      function showCommentBoxIfEdited() {
+        if (edited) {
+          commentBoxWrapper.style.display = "block";
+        }
+      }
+
+      function updateContestButton() {
+        approveBtn.textContent = edited ? "Contest" : "Approve";
+        showCommentBoxIfEdited();
+      }
   
-      const thead = document.createElement('thead');
-      const thr = document.createElement('tr');
-      ["Date", "Start", "End", "Start", "End", "Job", "Comment", "Total Hrs"].forEach(txt => {
-        const th = document.createElement('th');
-        th.textContent = txt;
-        th.style.whiteSpace = 'normal';
-        th.style.wordWrap = 'break-word';
-        thr.appendChild(th);
-      });
+      /* 2. Helper that builds an editable cell */
+        function makeEditableCell(val, type, cb) {
+        const cell = document.createElement("td");
+  
+        const span = document.createElement("span");
+          span.textContent = val;
+        span.style.cursor = "pointer";
+  
+        span.ondblclick = () => {
+            let input;
+          if (type === "time") {
+            input = document.createElement("input");
+            input.type = "time";
+            input.value = parseAmPmTo24Hr(val) || "";
+          } else if (type === "text") {
+            input = document.createElement("input");
+            input.type = "text";
+              input.value = val;
+          } else if (type === "select") {
+            input = document.createElement("select");
+  
+              const jobs = getCombinedJobs();
+            const emptyOpt = document.createElement("option");
+            emptyOpt.value = "";
+            emptyOpt.textContent = "(Select a job)";
+            input.appendChild(emptyOpt);
+  
+              jobs.forEach(j => {
+              const opt = document.createElement("option");
+                opt.value = j;
+                opt.textContent = j;
+                if (j === val) opt.selected = true;
+                input.appendChild(opt);
+              });
+            }
+  
+          input.onblur = () => {
+              let newVal = input.value;
+            if (type === "time") newVal = newVal ? formatTime24ToAmPm(newVal) : "";
+              span.textContent = newVal;
+              cell.replaceChild(span, input);
+  
+              if (newVal !== val) {
+                edited = true;
+                cb(newVal);
+              updateContestButton();   // flip button text right away
+              }
+            };
+  
+          input.onkeydown = ev => {
+            if (ev.key === "Enter") input.blur();
+            };
+  
+            cell.replaceChild(input, span);
+            input.focus();
+          };
+  
+          cell.appendChild(span);
+          return cell;
+        }
+  
+      /* ---------- build the table ---------- */
+      const wrapper = document.createElement("div");
+      wrapper.classList.add("table-wrapper");
+  
+      const table = document.createElement("table");
+      table.style.tableLayout = "fixed";
+      table.style.borderRadius = "20px";
+      table.style.overflow = "hidden";
+  
+      const thead = document.createElement("thead");
+      const thr = document.createElement("tr");
+      ["Date","Start","End","Start","End","On Call Hours","Job","Comment","Total Hrs"]
+        .forEach(txt => {
+          const th = document.createElement("th");
+          th.textContent = txt;
+          if (txt === 'On Call Hours') {
+            th.style.minWidth = '150px';
+            th.style.width = '150px';
+          }
+          thr.appendChild(th);
+        });
       thead.appendChild(thr);
       table.appendChild(thead);
   
-      const tb = document.createElement('tbody');
-      // Track if any edits are made
-      let edited = false;
-      let editedEntries = JSON.parse(JSON.stringify(ts.entries));
+      const tbody = document.createElement("tbody");
+  
       ts.entries.forEach((e, idx) => {
         if (idx === 7) {
           const sr = document.createElement('tr');
           sr.classList.add('spacer-row');
           const sc = document.createElement('td');
-          sc.colSpan = 8;
+          sc.colSpan = 9;
           sr.appendChild(sc);
-          tb.appendChild(sr);
+          tbody.appendChild(sr);
         }
-        const row = document.createElement('tr');
+        const row = document.createElement("tr");
         const dObj = new Date(e.date + "T12:00:00");
-        const wdShort = dObj.toLocaleDateString('en-US', { weekday: 'short' });
-        const dtShort = dObj.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
-        const dateHtml = `${wdShort}<br>(${dtShort})`;
-  
+        const dateHtml = `${dObj.toLocaleDateString('en-US', { weekday: 'short' })}<br>(${dObj.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })})`;
+
         const dCell = document.createElement('td');
         dCell.innerHTML = "<span" + styleNone(e.date) + ">" + dateHtml + "</span>";
         dCell.style.whiteSpace = 'normal';
-  
+
         // Editable cells for admin (pending only)
         function makeEditableCell(val, type, cb) {
           const cell = document.createElement('td');
@@ -1365,7 +1917,7 @@ return [...defaultJobs, ...userCustomJobs].sort((a, b) => a.localeCompare(b));
           cell.appendChild(span);
           return cell;
         }
-  
+
         // Start1
         const st1Cell = makeEditableCell(formatTime24ToAmPm(e.start1 || ' '), 'time', v => {
           editedEntries[idx].start1 = parseAmPmTo24Hr(v);
@@ -1386,6 +1938,18 @@ return [...defaultJobs, ...userCustomJobs].sort((a, b) => a.localeCompare(b));
           editedEntries[idx].end2 = parseAmPmTo24Hr(v);
           editedEntries[idx].totalHours = calculateHours(editedEntries[idx].start1, editedEntries[idx].end1) + calculateHours(editedEntries[idx].start2, editedEntries[idx].end2);
         });
+        // On Call Hours (display only)
+        const onCallTd = document.createElement('td');
+        onCallTd.style.textAlign = 'center';
+        onCallTd.style.minWidth = '150px';
+        onCallTd.style.width = '150px';
+        if (Array.isArray(e.onCallSessions) && e.onCallSessions.length > 0) {
+          e.onCallSessions.forEach(sess => {
+            const sessDiv = document.createElement('div');
+            sessDiv.textContent = `${formatTime24ToAmPm(sess.start)} - ${formatTime24ToAmPm(sess.end)}`;
+            onCallTd.appendChild(sessDiv);
+          });
+        }
         // Job
         const jobCell = makeEditableCell(e.jobDescription || '', 'select', v => {
           editedEntries[idx].jobDescription = v;
@@ -1395,183 +1959,101 @@ return [...defaultJobs, ...userCustomJobs].sort((a, b) => a.localeCompare(b));
           editedEntries[idx].comment = v;
         });
         // Total Hours
-        const hrsVal = isNaN(editedEntries[idx].totalHours) ? 0 : editedEntries[idx].totalHours;
+        let totalHrs = (calculateHours(e.start1, e.end1) + calculateHours(e.start2, e.end2));
+        if (Array.isArray(e.onCallSessions)) {
+          totalHrs += calculateOnCallSessionsHours(e.onCallSessions);
+        }
         const hrsCell = document.createElement('td');
-        hrsCell.textContent = hrsVal.toFixed(2);
-  
+        hrsCell.textContent = (isNaN(totalHrs) ? 0 : totalHrs).toFixed(2);
+
         row.appendChild(dCell);
         row.appendChild(st1Cell);
         row.appendChild(et1Cell);
         row.appendChild(st2Cell);
         row.appendChild(et2Cell);
+        row.appendChild(onCallTd);
         row.appendChild(jobCell);
         row.appendChild(cCell);
         row.appendChild(hrsCell);
-        tb.appendChild(row);
-      });
-      table.appendChild(tb);
-      tw.appendChild(table);
-      det.appendChild(tw);
-  
-      // Admin Logout reload
-      adminLogoutBtn.addEventListener('click', async () => {
-        await signOut(auth);
-        currentUser = null;
-        currentUserName = "";
-        isAdmin = false;
-        showUserLogin();
-        location.reload();
+        tbody.appendChild(row);
       });
   
-      const btnGroup = document.createElement('div');
-      btnGroup.classList.add('inline-button-group');
+      table.appendChild(tbody);
+      wrapper.appendChild(table);
+      details.appendChild(wrapper);
   
-      const openBtn = document.createElement('button');
+      /* ---------- button strip ---------- */
+      const btnGroup = document.createElement("div");
+      btnGroup.classList.add("inline-button-group");
+  
+      const openBtn = document.createElement("button");
       openBtn.textContent = "Open";
-      openBtn.addEventListener('click', () => {
-        if (det.classList.contains('hidden')) {
-          det.classList.remove('hidden');
-          openBtn.textContent = "Close";
-        } else {
-          det.classList.add('hidden');
-          openBtn.textContent = "Open";
-        }
-      });
+      openBtn.onclick = () => {
+        details.classList.toggle("hidden");
+        openBtn.textContent = details.classList.contains("hidden") ? "Open" : "Close";
+      };
       btnGroup.appendChild(openBtn);
-  
+
       if (isApprovedSection) {
-        const printBtn = document.createElement('button');
-        printBtn.textContent = "Print";
-        printBtn.addEventListener('click', () => {
-          printOrExportTimesheet(ts, true);
-        });
-        btnGroup.appendChild(printBtn);
-  
-        const delBtn = document.createElement('button');
-        delBtn.textContent = "Delete";
-        delBtn.addEventListener('click', async () => {
-          if (confirm("Are you sure you want to delete this timesheet? (User will still see it)")) {
-            await updateDoc(doc(db, 'timesheets', ts.id), { adminDeleted: true });
-            loadAdminData();
-          }
-        });
-        btnGroup.appendChild(delBtn);
+        const printBtnA = document.createElement("button");
+        printBtnA.textContent = "Print";
+        printBtnA.onclick = () => printOrExportTimesheet(ts, true);
+        btnGroup.appendChild(printBtnA);
       } else {
-        const printBtn = document.createElement('button');
-        printBtn.textContent = "Print";
-        printBtn.addEventListener('click', () => {
-          printOrExportTimesheet(ts, true);
-        });
+        // Add Print button for pending section
         btnGroup.appendChild(printBtn);
-  
-        // Approve/Contest button
-        const approveBtn = document.createElement('button');
-        approveBtn.textContent = "Approve";
-        btnGroup.appendChild(approveBtn);
-
-        // Helper to update Approve/Contest button
-        function updateContestButton() {
-          if (edited) {
-            approveBtn.textContent = "Contest";
-          } else {
-            approveBtn.textContent = "Approve";
-          }
-        }
-
-        approveBtn.addEventListener('click', async () => {
+        /* approve or contest */
+        approveBtn.onclick = async () => {
           if (approveBtn.textContent === "Contest") {
-            // Save edits, mark as contested, close view
-            await updateDoc(doc(db, 'timesheets', ts.id), {
+            if (!commentBox.value.trim()) {
+              commentBox.focus();
+              commentBox.style.borderColor = "red";
+              commentBox.placeholder = "Please enter a comment before contesting.";
+              return;
+            }
+            await updateDoc(doc(db, "timesheets", ts.id), {
               entries: editedEntries,
-              contested: true
+              contested: true,
+              adminEditComment: commentBox.value.trim()
             });
-            det.classList.add('hidden');
-            openBtn.textContent = "Open";
-            loadAdminData();
           } else {
             if (confirm("Approve this timesheet?")) {
-              await updateDoc(doc(db, 'timesheets', ts.id), { approved: true });
-              loadAdminData();
+              await updateDoc(doc(db, "timesheets", ts.id), { approved: true });
             }
           }
-        });
-
-        // Pass updateContestButton to editable cells
-        function makeEditableCell(val, type, cb) {
-          const cell = document.createElement('td');
-          let span = document.createElement('span');
-          span.textContent = val;
-          span.style.cursor = 'pointer';
-          span.ondblclick = function() {
-            let input;
-            if (type === 'time') {
-              input = document.createElement('input');
-              input.type = 'time';
-              input.value = parseAmPmTo24Hr(val) || '';
-            } else if (type === 'text') {
-              input = document.createElement('input');
-              input.type = 'text';
-              input.value = val;
-            } else if (type === 'select') {
-              input = document.createElement('select');
-              const jobs = getCombinedJobs();
-              jobs.forEach(j => {
-                const opt = document.createElement('option');
-                opt.value = j;
-                opt.textContent = j;
-                if (j === val) opt.selected = true;
-                input.appendChild(opt);
-              });
-              const emptyOpt = document.createElement('option');
-              emptyOpt.value = '';
-              emptyOpt.textContent = '(Select a job)';
-              if (!val) emptyOpt.selected = true;
-              input.insertBefore(emptyOpt, input.firstChild);
-            }
-            input.onblur = function() {
-              let newVal = input.value;
-              if (type === 'time') newVal = newVal ? formatTime24ToAmPm(newVal) : '';
-              span.textContent = newVal;
-              cell.replaceChild(span, input);
-              if (newVal !== val) {
-                edited = true;
-                cb(newVal);
-                updateContestButton();
-              }
-            };
-            input.onkeydown = function(ev) {
-              if (ev.key === 'Enter') input.blur();
-            };
-            cell.replaceChild(input, span);
-            input.focus();
-          };
-          cell.appendChild(span);
-          return cell;
-        }
+          loadAdminData(); // refresh list
+        };
+        btnGroup.appendChild(approveBtn);
       }
-  
-      card.appendChild(hd);
-      card.appendChild(det);
+
+      /* assemble card */
+      card.appendChild(header);
+      if (adminCommentBox) card.appendChild(adminCommentBox);
+      card.appendChild(details);
+      // Insert comment box above buttons for pending section
+      if (!isApprovedSection) card.appendChild(commentBoxWrapper);
       card.appendChild(btnGroup);
       containerEl.appendChild(card);
     });
   
-    const backBtn = document.createElement('button');
-    backBtn.textContent = "Back";
-    backBtn.style.display = "block";
-    backBtn.style.margin = "1rem auto 0 auto";
-    backBtn.addEventListener('click', () => {
-      containerEl.classList.add('hidden');
+    /* back button */
+    const back = document.createElement("button");
+    back.textContent = "Back";
+    back.style.display = "block";
+    back.style.margin = "1rem auto 0 auto";
+    back.onclick = () => {
+      containerEl.classList.add("hidden");
       containerEl.innerHTML = "";
-      adminLogoutBtn.classList.remove('hidden');
-      if (!isApprovedSection) {
-        adminUsersWrapper.classList.remove('hidden');
+      adminLogoutBtn.classList.remove("hidden");
+      if (isApprovedSection) {
+        adminApprovedWrapper.classList.remove("hidden");
       } else {
-        adminApprovedWrapper.classList.remove('hidden');
+        adminUsersWrapper.classList.remove("hidden");
       }
-    });
-    containerEl.appendChild(backBtn);
+    };
+    containerEl.appendChild(back);
   }
+  
   
   /*************************
    * Print or Export PDF
@@ -1646,6 +2128,7 @@ return [...defaultJobs, ...userCustomJobs].sort((a, b) => a.localeCompare(b));
           <th>End</th>
           <th>Start</th>
           <th>End</th>
+          <th>On Call Hours</th>
           <th>Job</th>
           <th>Comment</th>
           <th>Total Hrs</th>
@@ -1656,7 +2139,7 @@ return [...defaultJobs, ...userCustomJobs].sort((a, b) => a.localeCompare(b));
   
     tsData.entries.forEach((e, idx) => {
       if (idx === 7) {
-        html += `<tr><td colspan="8" style="border:none;"></td></tr>`;
+        html += `<tr><td colspan="9" style="border:none;"></td></tr>`;
       }
       const dObj = new Date(e.date + "T12:00:00");
       const wdShort = dObj.toLocaleDateString('en-US', { weekday: 'short' });
@@ -1673,10 +2156,19 @@ return [...defaultJobs, ...userCustomJobs].sort((a, b) => a.localeCompare(b));
       const et1 = maybeNone(formatTime24ToAmPm(e.end1 === "" ? "" : e.end1));
       const st2 = maybeNone(formatTime24ToAmPm(e.start2 === "" ? "" : e.start2));
       const et2 = maybeNone(formatTime24ToAmPm(e.end2 === "" ? "" : e.end2));
+      // On Call Hours cell
+      let onCallHtml = '';
+      if (Array.isArray(e.onCallSessions) && e.onCallSessions.length > 0) {
+        onCallHtml = e.onCallSessions.map(sess => `${formatTime24ToAmPm(sess.start)} - ${formatTime24ToAmPm(sess.end)}`).join('<br>');
+      }
       const job = maybeNone(e.jobDescription === "" ? "" : e.jobDescription);
       const cmt = maybeNone(e.comment === "" ? "" : e.comment);
-      const hrsVal = isNaN(e.totalHours) ? 0 : e.totalHours;
-      const hrs = maybeNone(hrsVal.toFixed(2));
+      // Calculate total hours including on call
+      let totalHrs = (calculateHours(e.start1, e.end1) + calculateHours(e.start2, e.end2));
+      if (Array.isArray(e.onCallSessions)) {
+        totalHrs += calculateOnCallSessionsHours(e.onCallSessions);
+      }
+      const hrs = maybeNone((isNaN(totalHrs) ? 0 : totalHrs).toFixed(2));
   
       html += `
       <tr>
@@ -1685,6 +2177,7 @@ return [...defaultJobs, ...userCustomJobs].sort((a, b) => a.localeCompare(b));
         <td>${et1}</td>
         <td>${st2}</td>
         <td>${et2}</td>
+        <td>${onCallHtml}</td>
         <td>${job}</td>
         <td>${cmt}</td>
         <td>${hrs}</td>
