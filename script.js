@@ -776,7 +776,7 @@ await addDoc(collection(db, 'timesheets'), {
 
 // ---- EMAILJS: Send notification to admin ----
 const payPeriod = `${sv} to ${endIso}`;
-sendTimesheetSubmittedEmail(currentUserName, payPeriod, "adamchaabane1234@gmail.com");
+sendTimesheetSubmittedEmail(currentUserName, payPeriod, "becky@alcowater.com");
 
 timesheetStartInput.value = "";
 timesheetFormDiv.innerHTML = "";
@@ -1240,17 +1240,13 @@ function buildTimesheetCard(ts, isContested) {
         contested: true,
         adminEditComment: contestCommentBox.value.trim()
       });
-      // Send contest email to the user
-      const userEmail = ts.userEmail || ts.email || null;
-      if (userEmail) {
-        sendTimesheetContestedEmail({
-          toEmail: userEmail,
-          userName: ts.userName,
-          startDate: ts.startDate,
-          endDate: ts.endDate
-        });
-        //alert(`email has been sent to ${userEmail}`);
-      }
+      // Send contest email to admin (not user)
+      sendTimesheetContestedEmail({
+        toEmail: "becky@alcowater.com",
+        userName: ts.userName,
+        startDate: ts.startDate,
+        endDate: ts.endDate
+      });
       details.classList.add("hidden");
       viewBtn.textContent = "View";
       loadUserTimesheets();
@@ -2049,17 +2045,14 @@ function buildTimesheetTable(entries) {
               contested: true,
               adminEditComment: commentBox.value.trim()
             });
-            // Send contest email to the user
-            const userEmail = ts.userEmail || ts.email || null;
-            if (userEmail) {
-              sendTimesheetContestedEmail({
-                toEmail: userEmail,
-                userName: ts.userName,
-                startDate: ts.startDate,
-                endDate: ts.endDate
-              });
-              alert(`email has been sent to ${userEmail}`);
-            }
+            // Send contest email to admin (not user)
+            sendTimesheetContestedEmail({
+              toEmail: "becky@alcowater.com",
+              userName: ts.userName,
+              startDate: ts.startDate,
+              endDate: ts.endDate
+            });
+            alert(`email has been sent to ${"becky@alcowater.com"}`);
           } else {
             if (confirm("Approve this timesheet?")) {
               await updateDoc(doc(db, "timesheets", ts.id), {
