@@ -696,7 +696,24 @@ exportTimesheetBtn.addEventListener("click", () => {
 
   
   /** Submit Timesheet */
-submitTimesheetBtn.addEventListener('click', async () => {
+  // ---- EMAILJS: Send notification on timesheet submit ----
+  // Make sure to add this to your index.html:
+  // <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+  // <script>emailjs.init("YOUR_USER_ID");</script>
+  function sendTimesheetSubmittedEmail(userName, payPeriod, adminEmail) {
+    if (typeof emailjs === 'undefined') return;
+    emailjs.send("service_09kopw4", "template_bc2wnuf", {
+      user: userName,
+      pay_period: payPeriod,
+      email: adminEmail
+    })
+    .then(function(response) {
+      console.log("Email sent!", response.status, response.text);
+    }, function(error) {
+      console.error("Email failed:", error);
+    });
+  }
+  submitTimesheetBtn.addEventListener('click', async () => {
 if (!currentUser) return;
 const sv = timesheetStartInput.value;
 if (!sv) return;
@@ -746,6 +763,7 @@ rows.forEach(r => {
 await addDoc(collection(db, 'timesheets'), {
   userId: currentUser.uid,
   userName: currentUserName,
+  userEmail: currentUser.email, // Save user's email for notifications
   startDate: sv,
   endDate: endIso,
   entries,
@@ -755,6 +773,10 @@ await addDoc(collection(db, 'timesheets'), {
   adminDeleted: false,
   userDeleted: false
 });
+
+// ---- EMAILJS: Send notification to admin ----
+const payPeriod = `${sv} to ${endIso}`;
+sendTimesheetSubmittedEmail(currentUserName, payPeriod, "adamchaabane1234@gmail.com");
 
 timesheetStartInput.value = "";
 timesheetFormDiv.innerHTML = "";
@@ -1218,6 +1240,17 @@ function buildTimesheetCard(ts, isContested) {
         contested: true,
         adminEditComment: contestCommentBox.value.trim()
       });
+      // Send contest email to the user
+      const userEmail = ts.userEmail || ts.email || null;
+      if (userEmail) {
+        sendTimesheetContestedEmail({
+          toEmail: userEmail,
+          userName: ts.userName,
+          startDate: ts.startDate,
+          endDate: ts.endDate
+        });
+        //alert(`email has been sent to ${userEmail}`);
+      }
       details.classList.add("hidden");
       viewBtn.textContent = "View";
       loadUserTimesheets();
@@ -2016,9 +2049,24 @@ function buildTimesheetTable(entries) {
               contested: true,
               adminEditComment: commentBox.value.trim()
             });
+            // Send contest email to the user
+            const userEmail = ts.userEmail || ts.email || null;
+            if (userEmail) {
+              sendTimesheetContestedEmail({
+                toEmail: userEmail,
+                userName: ts.userName,
+                startDate: ts.startDate,
+                endDate: ts.endDate
+              });
+              alert(`email has been sent to ${userEmail}`);
+            }
           } else {
             if (confirm("Approve this timesheet?")) {
-              await updateDoc(doc(db, "timesheets", ts.id), { approved: true });
+              await updateDoc(doc(db, "timesheets", ts.id), {
+                approved: true,
+                contested: false,
+                adminEditComment: deleteField()
+              });
             }
           }
           loadAdminData(); // refresh list
@@ -2401,3 +2449,24 @@ function buildTimesheetTable(entries) {
    * Done: init
    *************************/
   showUserLogin();
+
+// ---- EMAILJS: Send notification when a timesheet is contested ----
+function sendTimesheetContestedEmail({
+  toEmail,
+  userName,
+  startDate,
+  endDate
+}) {
+  if (typeof emailjs === 'undefined') return;
+  emailjs.send("service_09kopw4", "template_ig6528q", {
+    email: toEmail,
+    user: userName,
+    start_date: startDate,
+    end_date: endDate
+  })
+  .then(function(response) {
+    console.log("Contest email sent!", response.status, response.text);
+  }, function(error) {
+    console.error("Contest email failed:", error);
+  });
+}
