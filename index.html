@@ -403,6 +403,50 @@
       max-width: 250px;
       white-space: nowrap !important;
     }
+
+    th.on-call-header {
+      text-align: center !important;
+      vertical-align: middle;
+      white-space: normal;
+    }
+
+    @media (max-width: 600px) {
+      th.on-call-header {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        white-space: normal;
+        font-size: 1rem;
+        padding-bottom: 0.25em;
+      }
+      th.on-call-header::after {
+        content: "";
+        display: block;
+        width: 100%;
+        border-bottom: 1px solid #eee;
+        margin-top: 0.25em;
+      }
+      td[data-label="On Call Hours"] {
+        text-align: center !important;
+      }
+      .on-call-btn, button.add-on-call-btn {
+        display: block;
+        margin: 0.5em auto 0.5em auto;
+        text-align: center;
+        width: 90%;
+        max-width: 220px;
+      }
+    }
+
+    .on-call-btn, button.add-on-call-btn {
+      display: block;
+      margin: 0.5em auto 0.5em auto;
+      text-align: center;
+      width: 90%;
+      max-width: 220px;
+    }
   </style>
 </head>
 <body>
