@@ -826,6 +826,7 @@ async function renderTimesheetForm(existingDraft) {
       const th = document.createElement('th');
       th.textContent = txt;
       if (txt === 'On Call Hours') {
+        th.classList.add('on-call-header');
         th.style.minWidth = '150px';
         th.style.width = '150px';
       }
@@ -957,6 +958,7 @@ et2Td.appendChild(createTimeInput('end2'));
       // Add On Call button
       const addOnCallBtn = document.createElement('button');
       addOnCallBtn.textContent = 'Add On Call';
+      addOnCallBtn.classList.add('add-on-call-btn');
       addOnCallBtn.onclick = showOnCallInputs;
       onCallTd.appendChild(addOnCallBtn);
       // Render UI if already set
@@ -1465,6 +1467,7 @@ function buildTimesheetTable(entries) {
       const th = document.createElement("th");
       th.textContent = tx;
       if (tx === 'On Call Hours') {
+        th.classList.add('on-call-header');
         th.style.minWidth = '150px';
         th.style.width = '150px';
       }
@@ -1873,6 +1876,7 @@ function buildTimesheetTable(entries) {
           const th = document.createElement("th");
           th.textContent = txt;
           if (txt === 'On Call Hours') {
+            th.classList.add('on-call-header');
             th.style.minWidth = '150px';
             th.style.width = '150px';
           }
