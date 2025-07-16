@@ -235,62 +235,7 @@
       white-space: pre;         
     }
 
-    /* MOBILE TWEAKS */
-    @media (max-width: 700px) {
-      table thead {
-        display: none;
-      }
-      table, table tbody, table tr, table td {
-        display: block;
-        width: 100%;
-      }
-      table tr {
-        margin-bottom: 1rem;
-        border-bottom: 1px solid #ccc;
-      }
-      table td {
-        position: relative;
-        padding-left: 45%; 
-        text-align: center;
-        border: none;
-        border-bottom: 1px solid #eee;
-      }
-      table td:before {
-        content: attr(data-label) " ";
-        position: absolute;
-        width: 40%; 
-        left: -0.9rem;
-        font-weight: bold;
-        color: #000;
-      }
-      .spacer-row td {
-        border: none;
-        background: none;
-        height: 8px;
-      }
-      table td {
-        padding: 0.4rem;
-        font-size: 0.85rem;
-      }
-      input[type="time"],
-      select[name="jobDescription"] {
-        width: 60%;
-      }
-    }
-    @media (max-width: 600px) {
-      .container {
-        margin: 1rem 0.5rem;
-        padding: 1rem;
-        max-width: 100%;
-      }
-      body {
-        font-size: 0.95rem;
-      }
-      th, td {
-        font-size: 0.85rem;
-        padding: 0.5rem;
-      }
-    }
+   
 
     /* EASY FILL SETTINGS container */
     #easyfill-settings-container {
@@ -388,8 +333,7 @@
     
     
     
-  </style>
-  <style>
+  
     th[data-label="On Call Hours"], td[data-label="On Call Hours"], th.on-call-hours, td.on-call-hours {
       min-width: 220px !important;
       width: 220px !important;
@@ -410,43 +354,91 @@
       white-space: normal;
     }
 
-    @media (max-width: 600px) {
-      th.on-call-header {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        text-align: center;
-        white-space: normal;
-        font-size: 1rem;
-        padding-bottom: 0.25em;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     /* MOBILE TWEAKS */
+     @media (max-width: 700px) {
+      table thead {
+        display: none;
       }
-      th.on-call-header::after {
-        content: "";
+      table, table tbody, table tr, table td {
         display: block;
         width: 100%;
-        border-bottom: 1px solid #eee;
-        margin-top: 0.25em;
       }
-      td[data-label="On Call Hours"] {
-        text-align: center !important;
+      table tr {
+        margin-bottom: 1rem;
+        border-bottom: 1px solid #ccc;
       }
-      .on-call-btn, button.add-on-call-btn {
-        display: block;
-        margin: 0.5em auto 0.5em auto;
+      table td {
+        position: relative;
+        padding-left: 45%; 
         text-align: center;
-        width: 90%;
-        max-width: 220px;
+        border: none;
+        border-bottom: 1px solid #eee;
+      }
+      table td:before {
+        content: attr(data-label) " ";
+        position: absolute;
+        width: 40%; 
+        left: -0.9rem;
+        font-weight: bold;
+        color: #000;
+      }
+      .spacer-row td {
+        border: none;
+        background: none;
+        height: 8px;
+      }
+      table td {
+        padding: 0.4rem;
+        font-size: 0.85rem;
+      }
+      input[type="time"],
+      select[name="jobDescription"] {
+        width: 60%;
+      }
+      .container {
+        margin: 1rem 0.5rem;
+        padding: 1rem;
+        max-width: 100%;
+      }
+      body {
+        font-size: 0.95rem;
+      }
+      th, td {
+        font-size: 0.85rem;
+        padding: 0.5rem;
+      }
+      /* centre “Add On Call” no matter what */
+      .add-on-call-btn{
+        display:block;
+        margin:0.5rem auto;
+        width:auto;
       }
     }
 
-    .on-call-btn, button.add-on-call-btn {
-      display: block;
-      margin: 0.5em auto 0.5em auto;
-      text-align: center;
-      width: 90%;
-      max-width: 220px;
-    }
+
   </style>
 </head>
 <body>

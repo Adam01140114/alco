@@ -824,11 +824,13 @@ async function renderTimesheetForm(existingDraft) {
   const thr = document.createElement('tr');
   ["Date","Start Time:","End Time:","Start Time:","End Time:","On Call Hours","Job Description:","Comment:"].forEach((txt, idx) => {
       const th = document.createElement('th');
-      th.textContent = txt;
       if (txt === 'On Call Hours') {
         th.classList.add('on-call-header');
+        th.innerHTML = '<span>On Call Hours</span><br>';
         th.style.minWidth = '150px';
         th.style.width = '150px';
+      } else {
+        th.textContent = txt;
       }
       thr.appendChild(th);
   });
@@ -954,13 +956,29 @@ et2Td.appendChild(createTimeInput('end2'));
         onCallUI.appendChild(endDiv);
         onCallUI.appendChild(saveBtn);
         onCallTd.insertBefore(onCallUI, onCallTd.firstChild);
+
+
       }
       // Add On Call button
-      const addOnCallBtn = document.createElement('button');
-      addOnCallBtn.textContent = 'Add On Call';
-      addOnCallBtn.classList.add('add-on-call-btn');
-      addOnCallBtn.onclick = showOnCallInputs;
-      onCallTd.appendChild(addOnCallBtn);
+    // Make sure the parent cell is set to use flexbox
+// Style the parent cell to push content to the right
+// same place you style the parent cell
+
+
+onCallTd.style.display        = 'flex';      // <‑‑ add this back
+onCallTd.style.flexDirection  = 'column';
+onCallTd.style.alignItems     = 'center';
+onCallTd.style.justifyContent = 'center';
+
+
+// Create and style the button
+const addOnCallBtn = document.createElement('button');
+addOnCallBtn.textContent = 'Add On Call';
+addOnCallBtn.classList.add('add-on-call-btn');
+addOnCallBtn.onclick = showOnCallInputs;
+onCallTd.appendChild(addOnCallBtn);
+
+
       // Render UI if already set
       if (row.onCallSessions && row.onCallSessions.length > 0) renderOnCallUI();
 
@@ -1465,11 +1483,13 @@ function buildTimesheetTable(entries) {
   ["Date", "Start", "End", "Start", "End", "On Call Hours", "Job", "Comment", "Total Hrs"].forEach(
     (tx) => {
       const th = document.createElement("th");
-      th.textContent = tx;
       if (tx === 'On Call Hours') {
         th.classList.add('on-call-header');
+        th.innerHTML = '<span>On Call Hours</span><br>';
         th.style.minWidth = '150px';
         th.style.width = '150px';
+      } else {
+        th.textContent = tx;
       }
       thr.appendChild(th);
     }
@@ -1874,11 +1894,13 @@ function buildTimesheetTable(entries) {
       ["Date","Start","End","Start","End","On Call Hours","Job","Comment","Total Hrs"]
         .forEach(txt => {
           const th = document.createElement("th");
-          th.textContent = txt;
           if (txt === 'On Call Hours') {
             th.classList.add('on-call-header');
+            th.innerHTML = '<span>On Call Hours</span><br>';
             th.style.minWidth = '150px';
             th.style.width = '150px';
+          } else {
+            th.textContent = txt;
           }
           thr.appendChild(th);
         });
