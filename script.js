@@ -995,6 +995,7 @@ et2Td.appendChild(createTimeInput('end2'));
               onCallTd.removeChild(onCallUI);
             }
             addOnCallBtn.textContent = 'Add On Call';
+            addOnCallBtn.classList.remove('is-cancel'); // remove this
             onCallInputsVisible = false;
           }
         };
@@ -1009,6 +1010,7 @@ et2Td.appendChild(createTimeInput('end2'));
         if (!onCallInputsVisible) {
           showOnCallInputs();
           addOnCallBtn.textContent = 'Cancel';
+          addOnCallBtn.classList.add('is-cancel'); // add this
           onCallInputsVisible = true;
         } else {
           // Hide the input UI only
@@ -1016,6 +1018,7 @@ et2Td.appendChild(createTimeInput('end2'));
             onCallTd.removeChild(onCallUI);
           }
           addOnCallBtn.textContent = 'Add On Call';
+          addOnCallBtn.classList.remove('is-cancel'); // remove this
           onCallInputsVisible = false;
         }
       };
