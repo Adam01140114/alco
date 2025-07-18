@@ -894,27 +894,66 @@ et2Td.appendChild(createTimeInput('end2'));
       onCallTd.style.textAlign = 'center';
       onCallTd.style.minWidth = '150px';
       onCallTd.style.width = '150px';
-      // UI for on call entry
+      onCallTd.style.display        = 'flex';
+      onCallTd.style.flexDirection  = 'column';
+      onCallTd.style.alignItems     = 'center';
+      onCallTd.style.justifyContent = 'center';
+
       let onCallUI = null;
+      let onCallInputsVisible = false;
+      const addOnCallBtn = document.createElement('button');
+      addOnCallBtn.textContent = 'Add On Call';
+      addOnCallBtn.classList.add('add-on-call-btn');
+
       function renderOnCallUI() {
-        if (onCallUI) onCallTd.removeChild(onCallUI);
-        onCallUI = document.createElement('div');
-        onCallUI.classList.add('on-call-inputs-mobile'); // Added for mobile styling
-        onCallUI.style.marginBottom = '0.5rem';
-        // List all on call sessions
+        // Remove previous session list if present
+        const prevList = onCallTd.querySelector('.on-call-session-list');
+        if (prevList) onCallTd.removeChild(prevList);
+        // Create session list
+        const sessionList = document.createElement('div');
+        sessionList.classList.add('on-call-session-list');
+        sessionList.style.width = '100%';
+        sessionList.style.marginBottom = '0.5rem';
         if (row.onCallSessions && row.onCallSessions.length > 0) {
           row.onCallSessions.forEach((sess, idx) => {
             const sessDiv = document.createElement('div');
-            sessDiv.textContent = `${formatTime24ToAmPm(sess.start)} - ${formatTime24ToAmPm(sess.end)}`;
-            onCallUI.appendChild(sessDiv);
+            sessDiv.style.display = 'flex';
+            sessDiv.style.flexDirection = 'column';
+            sessDiv.style.alignItems = 'center';
+            sessDiv.style.marginBottom = '0.25rem';
+            // Session time
+            const timeSpan = document.createElement('span');
+            timeSpan.textContent = `${formatTime24ToAmPm(sess.start)} - ${formatTime24ToAmPm(sess.end)}`;
+            sessDiv.appendChild(timeSpan);
+            // Remove button
+            const removeBtn = document.createElement('button');
+            removeBtn.textContent = 'Remove';
+            removeBtn.style.background = '#ff4d4d';
+            removeBtn.style.color = '#fff';
+            removeBtn.style.border = 'none';
+            removeBtn.style.borderRadius = '4px';
+            removeBtn.style.fontSize = '0.75rem';
+            removeBtn.style.marginTop = '2px';
+            removeBtn.style.padding = '2px 8px';
+            removeBtn.onclick = async () => {
+              row.onCallSessions.splice(idx, 1);
+              draftData.onCallSessions = row.onCallSessions;
+              saveTimesheetDraft();
+              renderOnCallUI();
+            };
+            sessDiv.appendChild(removeBtn);
+            sessionList.appendChild(sessDiv);
           });
         }
-        onCallTd.insertBefore(onCallUI, onCallTd.firstChild);
+        onCallTd.insertBefore(sessionList, addOnCallBtn);
       }
+
       function showOnCallInputs() {
-        if (onCallUI) onCallTd.removeChild(onCallUI);
+        if (onCallUI && onCallUI.parentNode === onCallTd) {
+          onCallTd.removeChild(onCallUI);
+        }
         onCallUI = document.createElement('div');
-        onCallUI.classList.add('on-call-inputs-mobile'); // Added for mobile styling
+        onCallUI.classList.add('on-call-inputs-mobile');
         onCallUI.style.marginBottom = '0.5rem';
         const startDiv = document.createElement('div');
         startDiv.style.marginBottom = '0.25rem';
@@ -951,38 +990,37 @@ et2Td.appendChild(createTimeInput('end2'));
             row.onCallSessions = draftData.onCallSessions; // sync row copy
             saveTimesheetDraft();
             renderOnCallUI();
+            // After saving, hide the input UI and reset button
+            if (onCallUI && onCallUI.parentNode === onCallTd) {
+              onCallTd.removeChild(onCallUI);
+            }
+            addOnCallBtn.textContent = 'Add On Call';
+            onCallInputsVisible = false;
           }
         };
 
         onCallUI.appendChild(startDiv);
         onCallUI.appendChild(endDiv);
         onCallUI.appendChild(saveBtn);
-        onCallTd.insertBefore(onCallUI, onCallTd.firstChild);
-
-
+        onCallTd.insertBefore(onCallUI, addOnCallBtn);
       }
-      // Add On Call button
-    // Make sure the parent cell is set to use flexbox
-// Style the parent cell to push content to the right
-// same place you style the parent cell
 
-
-onCallTd.style.display        = 'flex';      // <‑‑ add this back
-onCallTd.style.flexDirection  = 'column';
-onCallTd.style.alignItems     = 'center';
-onCallTd.style.justifyContent = 'center';
-
-
-// Create and style the button
-const addOnCallBtn = document.createElement('button');
-addOnCallBtn.textContent = 'Add On Call';
-addOnCallBtn.classList.add('add-on-call-btn');
-addOnCallBtn.onclick = showOnCallInputs;
-onCallTd.appendChild(addOnCallBtn);
-
-
-      // Render UI if already set
-      if (row.onCallSessions && row.onCallSessions.length > 0) renderOnCallUI();
+      addOnCallBtn.onclick = function() {
+        if (!onCallInputsVisible) {
+          showOnCallInputs();
+          addOnCallBtn.textContent = 'Cancel';
+          onCallInputsVisible = true;
+        } else {
+          // Hide the input UI only
+          if (onCallUI && onCallUI.parentNode === onCallTd) {
+            onCallTd.removeChild(onCallUI);
+          }
+          addOnCallBtn.textContent = 'Add On Call';
+          onCallInputsVisible = false;
+        }
+      };
+      onCallTd.appendChild(addOnCallBtn);
+      renderOnCallUI();
 
       const jobSelect = document.createElement('select');
       jobSelect.name = 'jobDescription';
