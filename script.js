@@ -899,6 +899,7 @@ et2Td.appendChild(createTimeInput('end2'));
       function renderOnCallUI() {
         if (onCallUI) onCallTd.removeChild(onCallUI);
         onCallUI = document.createElement('div');
+        onCallUI.classList.add('on-call-inputs-mobile'); // Added for mobile styling
         onCallUI.style.marginBottom = '0.5rem';
         // List all on call sessions
         if (row.onCallSessions && row.onCallSessions.length > 0) {
@@ -913,6 +914,7 @@ et2Td.appendChild(createTimeInput('end2'));
       function showOnCallInputs() {
         if (onCallUI) onCallTd.removeChild(onCallUI);
         onCallUI = document.createElement('div');
+        onCallUI.classList.add('on-call-inputs-mobile'); // Added for mobile styling
         onCallUI.style.marginBottom = '0.5rem';
         const startDiv = document.createElement('div');
         startDiv.style.marginBottom = '0.25rem';
