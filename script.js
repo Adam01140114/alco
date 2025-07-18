@@ -902,7 +902,7 @@ et2Td.appendChild(createTimeInput('end2'));
       let onCallUI = null;
       let onCallInputsVisible = false;
       const addOnCallBtn = document.createElement('button');
-      addOnCallBtn.textContent = 'Add On Call';
+      addOnCallBtn.textContent = 'Add On Call Hours';
       addOnCallBtn.classList.add('add-on-call-btn');
 
       function renderOnCallUI() {
