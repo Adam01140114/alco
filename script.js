@@ -1017,7 +1017,7 @@ et2Td.appendChild(createTimeInput('end2'));
           if (onCallUI && onCallUI.parentNode === onCallTd) {
             onCallTd.removeChild(onCallUI);
           }
-          addOnCallBtn.textContent = 'Add On Call Hours';
+          addOnCallBtn.textContent = 'testHours';
           addOnCallBtn.classList.remove('is-cancel'); // remove this
           onCallInputsVisible = false;
         }
