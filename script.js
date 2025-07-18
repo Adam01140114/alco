@@ -640,14 +640,14 @@ saveTimesheetDraft();
 /* ---------- Export PDF (includes On Call hours) ---------- */
 exportTimesheetBtn.addEventListener("click", () => {
   if (!timesheetStartInput.value) {
-    alert("Please choose a start date first.");
-    return;
-  }
+  alert("Please choose a start date first.");
+  return;
+}
 
-  const daysToAdd = workSchedule === "weekly" ? 6 : 13;
+const daysToAdd = workSchedule === "weekly" ? 6 : 13;
   const sObj = parseLocalDate(timesheetStartInput.value);
-  const eObj = new Date(sObj);
-  eObj.setDate(eObj.getDate() + daysToAdd);
+const eObj = new Date(sObj);
+eObj.setDate(eObj.getDate() + daysToAdd);
   const endIso = `${eObj.getFullYear()}-${String(eObj.getMonth() + 1).padStart(2, "0")}-${String(eObj.getDate()).padStart(2, "0")}`;
 
   const entries = [];
@@ -670,25 +670,25 @@ exportTimesheetBtn.addEventListener("click", () => {
       calculateHours(st2, et2) +
       calculateOnCallSessionsHours(onCallSessions);
 
-    entries.push({
-      date: dt,
-      start1: st1,
-      end1: et1,
-      start2: st2,
-      end2: et2,
+  entries.push({
+    date: dt,
+    start1: st1,
+    end1: et1,
+    start2: st2,
+    end2: et2,
       onCallSessions,       // keep the array
       jobDescription: job,
       comment: cmt,
       totalHours
-    });
   });
+});
 
-  printOrExportTimesheet({
-    userName: currentUserName,
+printOrExportTimesheet({
+  userName: currentUserName,
     startDate: timesheetStartInput.value,
-    endDate: endIso,
+  endDate: endIso,
     entries
-  });
+});
 });
 
 
@@ -713,7 +713,7 @@ exportTimesheetBtn.addEventListener("click", () => {
       console.error("Email failed:", error);
     });
   }
-  submitTimesheetBtn.addEventListener('click', async () => {
+submitTimesheetBtn.addEventListener('click', async () => {
 if (!currentUser) return;
 const sv = timesheetStartInput.value;
 if (!sv) return;
@@ -830,7 +830,7 @@ async function renderTimesheetForm(existingDraft) {
         th.style.minWidth = '150px';
         th.style.width = '150px';
       } else {
-        th.textContent = txt;
+      th.textContent = txt;
       }
       thr.appendChild(th);
   });
@@ -1017,7 +1017,7 @@ et2Td.appendChild(createTimeInput('end2'));
           if (onCallUI && onCallUI.parentNode === onCallTd) {
             onCallTd.removeChild(onCallUI);
           }
-          addOnCallBtn.textContent = 'testHours';
+          addOnCallBtn.textContent = 'Add On Call Hours';
           addOnCallBtn.classList.remove('is-cancel'); // remove this
           onCallInputsVisible = false;
         }
@@ -1531,7 +1531,7 @@ function buildTimesheetTable(entries) {
         th.innerHTML = '<span>On Call Hours</span><br>';
         th.style.minWidth = '150px';
         th.style.width = '150px';
-      } else {
+        } else {
         th.textContent = tx;
       }
       thr.appendChild(th);
@@ -1943,10 +1943,10 @@ function buildTimesheetTable(entries) {
             th.style.minWidth = '150px';
             th.style.width = '150px';
           } else {
-            th.textContent = txt;
+        th.textContent = txt;
           }
-          thr.appendChild(th);
-        });
+        thr.appendChild(th);
+      });
       thead.appendChild(thr);
       table.appendChild(thead);
   
@@ -1964,11 +1964,11 @@ function buildTimesheetTable(entries) {
         const row = document.createElement("tr");
         const dObj = new Date(e.date + "T12:00:00");
         const dateHtml = `${dObj.toLocaleDateString('en-US', { weekday: 'short' })}<br>(${dObj.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })})`;
-
+  
         const dCell = document.createElement('td');
         dCell.innerHTML = "<span" + styleNone(e.date) + ">" + dateHtml + "</span>";
         dCell.style.whiteSpace = 'normal';
-
+  
         // Editable cells for admin (pending only)
         function makeEditableCell(val, type, cb) {
           const cell = document.createElement('td');
@@ -2021,7 +2021,7 @@ function buildTimesheetTable(entries) {
           cell.appendChild(span);
           return cell;
         }
-
+  
         // Start1
         const st1Cell = makeEditableCell(formatTime24ToAmPm(e.start1 || ' '), 'time', v => {
           editedEntries[idx].start1 = parseAmPmTo24Hr(v);
@@ -2069,7 +2069,7 @@ function buildTimesheetTable(entries) {
         }
         const hrsCell = document.createElement('td');
         hrsCell.textContent = (isNaN(totalHrs) ? 0 : totalHrs).toFixed(2);
-
+  
         row.appendChild(dCell);
         row.appendChild(st1Cell);
         row.appendChild(et1Cell);
@@ -2097,7 +2097,7 @@ function buildTimesheetTable(entries) {
         openBtn.textContent = details.classList.contains("hidden") ? "Open" : "Close";
       };
       btnGroup.appendChild(openBtn);
-
+  
       if (isApprovedSection) {
         const printBtnA = document.createElement("button");
         printBtnA.textContent = "Print";
