@@ -1,5 +1,7 @@
- // Add these helper functions at the top of your script
- function saveTimesheetDraft() {
+// Add these helper functions at the top of your script
+console.log('=== TIMESHEET SCRIPT LOADED - VERSION WITH FIX ===');
+
+function saveTimesheetDraft() {
   const draftData = {
       startDate: timesheetStartInput.value,
       entries: {}
@@ -69,6 +71,75 @@
     }
     return new Date(currentStart);
   }
+
+  /**
+   * Check if a date is a valid pay period start date
+   * Valid dates are: Jan 6 + multiples of 14 days within the same year
+   */
+  function isValidPayPeriodStartDate(date) {
+    if (!date) return false;
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return false;
+    
+    const year = d.getFullYear();
+    const baseDate = new Date(Date.UTC(year, 0, 6));
+    const baseUTC = baseDate.getTime();
+    const dateUTC = Date.UTC(year, d.getMonth(), d.getDate());
+    
+    // Check if date is before the base date for this year
+    if (dateUTC < baseUTC) {
+      // Check previous year
+      const prevYearBase = Date.UTC(year - 1, 0, 6);
+      const daysDiff = (dateUTC - prevYearBase) / (24 * 60 * 60 * 1000);
+      return daysDiff >= 0 && daysDiff % 14 === 0;
+    }
+    
+    // Check if date is exactly on a pay period start (multiple of 14 days from Jan 6)
+    const daysDiff = (dateUTC - baseUTC) / (24 * 60 * 60 * 1000);
+    return daysDiff >= 0 && daysDiff % 14 === 0;
+  }
+
+  /**
+   * Find the nearest valid pay period start date (rounds to the nearest valid date)
+   */
+  function findNearestValidPayPeriodStart(date) {
+    if (!date) return getPayPeriodStartForToday();
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return getPayPeriodStartForToday();
+    
+    const year = d.getFullYear();
+    const baseDate = new Date(Date.UTC(year, 0, 6));
+    const baseUTC = baseDate.getTime();
+    const dateUTC = Date.UTC(year, d.getMonth(), d.getDate());
+    
+    // Calculate days from base
+    let daysDiff = Math.round((dateUTC - baseUTC) / (24 * 60 * 60 * 1000));
+    
+    // If negative, check previous year
+    if (daysDiff < 0) {
+      const prevYearBase = Date.UTC(year - 1, 0, 6);
+      daysDiff = Math.round((dateUTC - prevYearBase) / (24 * 60 * 60 * 1000));
+      if (daysDiff < 0) {
+        return getPayPeriodStartForToday();
+      }
+      // Round to nearest multiple of 14
+      const nearestPeriod = Math.round(daysDiff / 14) * 14;
+      const resultDate = new Date(prevYearBase + nearestPeriod * 24 * 60 * 60 * 1000);
+      return resultDate;
+    }
+    
+    // Round to nearest multiple of 14
+    const nearestPeriod = Math.round(daysDiff / 14) * 14;
+    const resultDate = new Date(baseUTC + nearestPeriod * 24 * 60 * 60 * 1000);
+    
+    // If result is in the future beyond reasonable range, use today's pay period
+    const today = new Date();
+    if (resultDate > today && resultDate.getTime() - today.getTime() > 14 * 24 * 60 * 60 * 1000) {
+      return getPayPeriodStartForToday();
+    }
+    
+    return resultDate;
+  }
   
   /** If " "/"NaN", style them so they're effectively invisible. */
   function styleNone(val) {
@@ -115,13 +186,105 @@
   
   /** compute hours from "HH:MM" start/end */
   function calculateHours(st, et) {
-    if (!st || st===" " || !et || et===" ") return 0;
+    console.log('[calculateHours] Called with:', { st, et, stType: typeof st, etType: typeof et });
+    if (!st || st===" " || !et || et===" ") {
+      console.log('[calculateHours] Returning 0 - missing start or end');
+      return 0;
+    }
     const [sh, sm] = st.split(':').map(Number);
     const [eh, em] = et.split(':').map(Number);
+    console.log('[calculateHours] Parsed times:', { sh, sm, eh, em });
     const sTot = sh * 60 + sm;
     const eTot = eh * 60 + em;
-    if (eTot <= sTot) return 0;
-    return (eTot - sTot) / 60;
+    console.log('[calculateHours] Total minutes:', { sTot, eTot });
+    if (eTot <= sTot) {
+      console.log('[calculateHours] Returning 0 - end <= start');
+      return 0;
+    }
+    const hours = (eTot - sTot) / 60;
+    console.log('[calculateHours] Returning hours:', hours);
+    return hours;
+  }
+
+  /** compute total hours intelligently handling edge cases */
+  function calculateTotalHours(start1, end1, start2, end2) {
+    console.log('[calculateTotalHours] ===== START =====');
+    console.log('[calculateTotalHours] Raw inputs:', { 
+      start1, end1, start2, end2,
+      start1Type: typeof start1, end1Type: typeof end1,
+      start2Type: typeof start2, end2Type: typeof end2
+    });
+    
+    // Normalize: handle null, undefined, empty strings, and " " (space)
+    const normalize = (val) => {
+      if (val == null || val === undefined) {
+        console.log('[normalize] Value is null/undefined:', val);
+        return "";
+      }
+      const str = String(val);
+      const trimmed = str.trim();
+      // Return empty string if value is empty, just a space, or "NaN"
+      if (trimmed === "" || trimmed === " " || trimmed === "NaN" || trimmed.toLowerCase() === "none") {
+        console.log('[normalize] Value is empty/space/NaN/none:', { original: val, str, trimmed });
+        return "";
+      }
+      console.log('[normalize] Value normalized:', { original: val, str, trimmed, result: trimmed });
+      return trimmed;
+    };
+    
+    const st1 = normalize(start1);
+    const et1 = normalize(end1);
+    const st2 = normalize(start2);
+    const et2 = normalize(end2);
+    
+    console.log('[calculateTotalHours] After normalization:', { st1, et1, st2, et2 });
+    console.log('[calculateTotalHours] Boolean checks:', { 
+      st1Bool: !!st1, et1Bool: !!et1, st2Bool: !!st2, et2Bool: !!et2,
+      notEt1: !et1, notSt2: !st2
+    });
+
+    // Special case: start1 filled, end1 blank, start2 blank, end2 filled
+    // Calculate from start1 to end2 (treating it as one continuous period)
+    const isSpecialCase = st1 && !et1 && !st2 && et2;
+    console.log('[calculateTotalHours] Special case check:', {
+      condition: 'st1 && !et1 && !st2 && et2',
+      st1: !!st1,
+      notEt1: !et1,
+      notSt2: !st2,
+      et2: !!et2,
+      result: isSpecialCase
+    });
+    
+    if (isSpecialCase) {
+      console.log('[calculateTotalHours] SPECIAL CASE DETECTED - calculating from start1 to end2');
+      const hours = calculateHours(st1, et2);
+      console.log('[calculateTotalHours] Special case result:', hours);
+      console.log('[calculateTotalHours] ===== END (special case) =====');
+      return hours;
+    }
+
+    // Normal case: calculate both periods if they have both start and end
+    console.log('[calculateTotalHours] NORMAL CASE - calculating both periods');
+    let total = 0;
+    if (st1 && et1) {
+      console.log('[calculateTotalHours] Calculating period 1:', { st1, et1 });
+      const period1 = calculateHours(st1, et1);
+      console.log('[calculateTotalHours] Period 1 hours:', period1);
+      total += period1;
+    } else {
+      console.log('[calculateTotalHours] Skipping period 1 - missing start or end');
+    }
+    if (st2 && et2) {
+      console.log('[calculateTotalHours] Calculating period 2:', { st2, et2 });
+      const period2 = calculateHours(st2, et2);
+      console.log('[calculateTotalHours] Period 2 hours:', period2);
+      total += period2;
+    } else {
+      console.log('[calculateTotalHours] Skipping period 2 - missing start or end');
+    }
+    console.log('[calculateTotalHours] Total hours:', total);
+    console.log('[calculateTotalHours] ===== END (normal case) =====');
+    return total;
   }
   
   import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
@@ -598,8 +761,52 @@ loadUserWorkSchedule();
     renderTimesheetForm();
   });
   
+  // Add input event listener for real-time validation
+  timesheetStartInput.addEventListener('input', () => {
+    if (!timesheetStartInput.value) return;
+    
+    const selectedDate = new Date(timesheetStartInput.value + 'T12:00:00');
+    
+    // Validate and correct the date if needed
+    if (!isValidPayPeriodStartDate(selectedDate)) {
+      const validDate = findNearestValidPayPeriodStart(selectedDate);
+      const validDateStr = validDate.toISOString().split('T')[0];
+      
+      console.log('[DATE VALIDATION] Invalid date selected:', timesheetStartInput.value);
+      console.log('[DATE VALIDATION] Corrected to:', validDateStr);
+      
+      // Update the input value
+      timesheetStartInput.value = validDateStr;
+      
+      // Show a temporary message
+      const existingMessage = document.getElementById('date-validation-message');
+      if (existingMessage) {
+        existingMessage.remove();
+      }
+      
+      const message = document.createElement('div');
+      message.id = 'date-validation-message';
+      message.style.cssText = 'position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #ff9800; color: white; padding: 10px 20px; border-radius: 4px; z-index: 10000; box-shadow: 0 2px 8px rgba(0,0,0,0.2); font-size: 14px;';
+      message.textContent = `Date adjusted to valid pay period start: ${validDate.toLocaleDateString()}`;
+      document.body.appendChild(message);
+      setTimeout(() => {
+        if (message.parentNode) {
+          message.parentNode.removeChild(message);
+        }
+      }, 3000);
+    }
+  });
+
   timesheetStartInput.addEventListener('change', () => {
     if (!timesheetStartInput.value) return;
+    
+    // Final validation on change
+    const selectedDate = new Date(timesheetStartInput.value + 'T12:00:00');
+    if (!isValidPayPeriodStartDate(selectedDate)) {
+      const validDate = findNearestValidPayPeriodStart(selectedDate);
+      timesheetStartInput.value = validDate.toISOString().split('T')[0];
+    }
+    
     timesheetEntryContainer.classList.remove('hidden');
     renderTimesheetForm();
   });
@@ -653,10 +860,25 @@ eObj.setDate(eObj.getDate() + daysToAdd);
   const entries = [];
   timesheetFormDiv.querySelectorAll(".timesheet-row").forEach(row => {
     const dt  = row.getAttribute("data-date");
-    const st1 = row.querySelector('input[name="start1"]').value.trim() || " ";
-    const et1 = row.querySelector('input[name="end1"]').value.trim()   || " ";
-    const st2 = row.querySelector('input[name="start2"]').value.trim() || " ";
-    const et2 = row.querySelector('input[name="end2"]').value.trim()   || " ";
+    const st1Input = row.querySelector('input[name="start1"]');
+    const et1Input = row.querySelector('input[name="end1"]');
+    const st2Input = row.querySelector('input[name="start2"]');
+    const et2Input = row.querySelector('input[name="end2"]');
+    
+    const st1Raw = st1Input ? st1Input.value : '';
+    const et1Raw = et1Input ? et1Input.value : '';
+    const st2Raw = st2Input ? st2Input.value : '';
+    const et2Raw = et2Input ? et2Input.value : '';
+    
+    console.log('[EXPORT] Row for date:', dt);
+    console.log('[EXPORT] Raw input values:', { st1Raw, et1Raw, st2Raw, et2Raw });
+    
+    const st1 = st1Raw.trim() || " ";
+    const et1 = et1Raw.trim()   || " ";
+    const st2 = st2Raw.trim() || " ";
+    const et2 = et2Raw.trim()   || " ";
+    
+    console.log('[EXPORT] After trim and default:', { st1, et1, st2, et2 });
 
     const job = row.querySelector('select[name="jobDescription"]').value.trim() || " ";
     const cmt = row.querySelector('input[name="comment"]').value.trim()          || " ";
@@ -665,10 +887,11 @@ eObj.setDate(eObj.getDate() + daysToAdd);
     const onCallSessions = Array.isArray(row.onCallSessions) ? row.onCallSessions : [];
 
     /* NEW: include on‑call time in total hours */
-    const totalHours =
-      calculateHours(st1, et1) +
-      calculateHours(st2, et2) +
-      calculateOnCallSessionsHours(onCallSessions);
+    console.log('[EXPORT] Calling calculateTotalHours with:', { st1, et1, st2, et2 });
+    const regularHours = calculateTotalHours(st1, et1, st2, et2);
+    const onCallHours = calculateOnCallSessionsHours(onCallSessions);
+    const totalHours = regularHours + onCallHours;
+    console.log('[EXPORT] Calculated hours:', { regularHours, onCallHours, totalHours });
 
   entries.push({
     date: dt,
@@ -734,10 +957,26 @@ let entries = [];
 const rows = timesheetFormDiv.querySelectorAll('.timesheet-row');
 rows.forEach(r => {
   const dt = r.getAttribute('data-date');
-  const st1 = r.querySelector('input[name="start1"]').value.trim() || " ";
-  const et1 = r.querySelector('input[name="end1"]').value.trim() || " ";
-  const st2 = r.querySelector('input[name="start2"]').value.trim() || " ";
-  const et2 = r.querySelector('input[name="end2"]').value.trim() || " ";
+  const st1Input = r.querySelector('input[name="start1"]');
+  const et1Input = r.querySelector('input[name="end1"]');
+  const st2Input = r.querySelector('input[name="start2"]');
+  const et2Input = r.querySelector('input[name="end2"]');
+  
+  const st1Raw = st1Input ? st1Input.value : '';
+  const et1Raw = et1Input ? et1Input.value : '';
+  const st2Raw = st2Input ? st2Input.value : '';
+  const et2Raw = et2Input ? et2Input.value : '';
+  
+  console.log('[SUBMIT] Row for date:', dt);
+  console.log('[SUBMIT] Raw input values:', { st1Raw, et1Raw, st2Raw, et2Raw });
+  
+  const st1 = st1Raw.trim() || " ";
+  const et1 = et1Raw.trim() || " ";
+  const st2 = st2Raw.trim() || " ";
+  const et2 = et2Raw.trim() || " ";
+  
+  console.log('[SUBMIT] After trim and default:', { st1, et1, st2, et2 });
+  
   const jb = r.querySelector('select[name="jobDescription"]').value.trim() || " ";
   const cm = r.querySelector('input[name="comment"]').value.trim() || " ";
   // Get onCallSessions from draft if present
@@ -746,7 +985,11 @@ rows.forEach(r => {
   if (draft && draft.entries && draft.entries[dt] && Array.isArray(draft.entries[dt].onCallSessions)) {
     onCallSessions = draft.entries[dt].onCallSessions;
   }
-  const hrs = calculateHours(st1, et1) + calculateHours(st2, et2) + calculateOnCallSessionsHours(onCallSessions);
+  console.log('[SUBMIT] Calling calculateTotalHours with:', { st1, et1, st2, et2 });
+  const regularHrs = calculateTotalHours(st1, et1, st2, et2);
+  const onCallHrs = calculateOnCallSessionsHours(onCallSessions);
+  const hrs = regularHrs + onCallHrs;
+  console.log('[SUBMIT] Calculated hours:', { regularHrs, onCallHrs, total: hrs });
   entries.push({
     date: dt,
     start1: st1,
@@ -874,19 +1117,23 @@ async function renderTimesheetForm(existingDraft) {
       // Start/End time cells
 const st1Td = document.createElement('td');
 st1Td.setAttribute('data-label', 'Start Time');
-st1Td.appendChild(createTimeInput('start1'));
+const st1Input = createTimeInput('start1');
+st1Td.appendChild(st1Input);
 
 const et1Td = document.createElement('td');
 et1Td.setAttribute('data-label', 'End Time');
-et1Td.appendChild(createTimeInput('end1'));
+const et1Input = createTimeInput('end1');
+et1Td.appendChild(et1Input);
 
 const st2Td = document.createElement('td');
 st2Td.setAttribute('data-label', 'Start Time');
-st2Td.appendChild(createTimeInput('start2'));
+const st2Input = createTimeInput('start2');
+st2Td.appendChild(st2Input);
 
 const et2Td = document.createElement('td');
 et2Td.setAttribute('data-label', 'End Time');
-et2Td.appendChild(createTimeInput('end2'));
+const et2Input = createTimeInput('end2');
+et2Td.appendChild(et2Input);
 
       // On Call Hours cell
       const onCallTd = document.createElement('td');
@@ -1054,6 +1301,56 @@ et2Td.appendChild(createTimeInput('end2'));
       
       const commentTd = document.createElement('td');
       commentTd.appendChild(commentInput);
+
+      // Function to log and calculate total hours (hidden from UI but logged for debugging)
+      const updateTotalHours = () => {
+        const st1Val = st1Input.value.trim() || " ";
+        const et1Val = et1Input.value.trim() || " ";
+        const st2Val = st2Input.value.trim() || " ";
+        const et2Val = et2Input.value.trim() || " ";
+        
+        console.log('[FORM] ===== UPDATING TOTAL HOURS =====');
+        console.log('[FORM] Row date:', iso);
+        console.log('[FORM] Raw input values:', { 
+          st1Raw: st1Input.value, 
+          et1Raw: et1Input.value, 
+          st2Raw: st2Input.value, 
+          et2Raw: et2Input.value 
+        });
+        console.log('[FORM] After trim/default:', { st1Val, et1Val, st2Val, et2Val });
+        
+        const regularHrs = calculateTotalHours(st1Val, et1Val, st2Val, et2Val);
+        const onCallHrs = calculateOnCallSessionsHours(row.onCallSessions || []);
+        const total = regularHrs + onCallHrs;
+        
+        console.log('[FORM] Final calculation:', { regularHrs, onCallHrs, total });
+        console.log('[FORM] ===== END UPDATE =====');
+      };
+      
+      // Add immediate logging and calculate total hours when any time input changes
+      st1Input.addEventListener('input', (e) => {
+        console.log('[FORM INPUT] start1 changed to:', e.target.value, 'for date:', iso);
+        saveTimesheetDraft();
+        updateTotalHours();
+      });
+      et1Input.addEventListener('input', (e) => {
+        console.log('[FORM INPUT] end1 changed to:', e.target.value, 'for date:', iso);
+        saveTimesheetDraft();
+        updateTotalHours();
+      });
+      st2Input.addEventListener('input', (e) => {
+        console.log('[FORM INPUT] start2 changed to:', e.target.value, 'for date:', iso);
+        saveTimesheetDraft();
+        updateTotalHours();
+      });
+      et2Input.addEventListener('input', (e) => {
+        console.log('[FORM INPUT] end2 changed to:', e.target.value, 'for date:', iso);
+        saveTimesheetDraft();
+        updateTotalHours();
+      });
+      
+      // Initial calculation
+      updateTotalHours();
 
       row.appendChild(dateTd);
       row.appendChild(st1Td);
@@ -1402,9 +1699,16 @@ function buildEditableTimesheetTable(entries, editedEntries, onEdit) {
           if (newVal !== e[k]) {
             editedEntries[idx][k] = newVal;
             // recalc total hours
+            console.log('[buildEditableTimesheetTable] Recalculating hours after edit');
+            console.log('[buildEditableTimesheetTable] Entry values:', {
+              start1: editedEntries[idx].start1,
+              end1: editedEntries[idx].end1,
+              start2: editedEntries[idx].start2,
+              end2: editedEntries[idx].end2
+            });
             editedEntries[idx].totalHours =
-              calculateHours(editedEntries[idx].start1, editedEntries[idx].end1) +
-              calculateHours(editedEntries[idx].start2, editedEntries[idx].end2);
+              calculateTotalHours(editedEntries[idx].start1, editedEntries[idx].end1, editedEntries[idx].start2, editedEntries[idx].end2);
+            console.log('[buildEditableTimesheetTable] New total hours:', editedEntries[idx].totalHours);
             onEdit();
           }
         };
@@ -1593,8 +1897,13 @@ function buildTimesheetTable(entries) {
 
     // Total hours: sum of regular + on call
     const hrsCell = document.createElement("td");
-    let totalHrs = (calculateHours(e.start1, e.end1) + calculateHours(e.start2, e.end2));
-    totalHrs += calculateOnCallSessionsHours(e.onCallSessions);
+    console.log('[buildTimesheetTable] Entry for date:', e.date);
+    console.log('[buildTimesheetTable] Entry values:', { start1: e.start1, end1: e.end1, start2: e.start2, end2: e.end2 });
+    console.log('[buildTimesheetTable] Calling calculateTotalHours');
+    let totalHrs = calculateTotalHours(e.start1, e.end1, e.start2, e.end2);
+    const onCallHrs = calculateOnCallSessionsHours(e.onCallSessions);
+    totalHrs += onCallHrs;
+    console.log('[buildTimesheetTable] Final total hours:', totalHrs);
     hrsCell.textContent = (isNaN(totalHrs) ? 0 : totalHrs).toFixed(2);
     row.appendChild(hrsCell);
 
@@ -2024,23 +2333,55 @@ function buildTimesheetTable(entries) {
   
         // Start1
         const st1Cell = makeEditableCell(formatTime24ToAmPm(e.start1 || ' '), 'time', v => {
+          console.log('[showAdminUserTimesheets] Start1 edited:', v);
           editedEntries[idx].start1 = parseAmPmTo24Hr(v);
-          editedEntries[idx].totalHours = calculateHours(editedEntries[idx].start1, editedEntries[idx].end1) + calculateHours(editedEntries[idx].start2, editedEntries[idx].end2);
+          console.log('[showAdminUserTimesheets] Recalculating with:', {
+            start1: editedEntries[idx].start1,
+            end1: editedEntries[idx].end1,
+            start2: editedEntries[idx].start2,
+            end2: editedEntries[idx].end2
+          });
+          editedEntries[idx].totalHours = calculateTotalHours(editedEntries[idx].start1, editedEntries[idx].end1, editedEntries[idx].start2, editedEntries[idx].end2);
+          console.log('[showAdminUserTimesheets] New total hours:', editedEntries[idx].totalHours);
         });
         // End1
         const et1Cell = makeEditableCell(formatTime24ToAmPm(e.end1 || ' '), 'time', v => {
+          console.log('[showAdminUserTimesheets] End1 edited:', v);
           editedEntries[idx].end1 = parseAmPmTo24Hr(v);
-          editedEntries[idx].totalHours = calculateHours(editedEntries[idx].start1, editedEntries[idx].end1) + calculateHours(editedEntries[idx].start2, editedEntries[idx].end2);
+          console.log('[showAdminUserTimesheets] Recalculating with:', {
+            start1: editedEntries[idx].start1,
+            end1: editedEntries[idx].end1,
+            start2: editedEntries[idx].start2,
+            end2: editedEntries[idx].end2
+          });
+          editedEntries[idx].totalHours = calculateTotalHours(editedEntries[idx].start1, editedEntries[idx].end1, editedEntries[idx].start2, editedEntries[idx].end2);
+          console.log('[showAdminUserTimesheets] New total hours:', editedEntries[idx].totalHours);
         });
         // Start2
         const st2Cell = makeEditableCell(formatTime24ToAmPm(e.start2 || ' '), 'time', v => {
+          console.log('[showAdminUserTimesheets] Start2 edited:', v);
           editedEntries[idx].start2 = parseAmPmTo24Hr(v);
-          editedEntries[idx].totalHours = calculateHours(editedEntries[idx].start1, editedEntries[idx].end1) + calculateHours(editedEntries[idx].start2, editedEntries[idx].end2);
+          console.log('[showAdminUserTimesheets] Recalculating with:', {
+            start1: editedEntries[idx].start1,
+            end1: editedEntries[idx].end1,
+            start2: editedEntries[idx].start2,
+            end2: editedEntries[idx].end2
+          });
+          editedEntries[idx].totalHours = calculateTotalHours(editedEntries[idx].start1, editedEntries[idx].end1, editedEntries[idx].start2, editedEntries[idx].end2);
+          console.log('[showAdminUserTimesheets] New total hours:', editedEntries[idx].totalHours);
         });
         // End2
         const et2Cell = makeEditableCell(formatTime24ToAmPm(e.end2 || ' '), 'time', v => {
+          console.log('[showAdminUserTimesheets] End2 edited:', v);
           editedEntries[idx].end2 = parseAmPmTo24Hr(v);
-          editedEntries[idx].totalHours = calculateHours(editedEntries[idx].start1, editedEntries[idx].end1) + calculateHours(editedEntries[idx].start2, editedEntries[idx].end2);
+          console.log('[showAdminUserTimesheets] Recalculating with:', {
+            start1: editedEntries[idx].start1,
+            end1: editedEntries[idx].end1,
+            start2: editedEntries[idx].start2,
+            end2: editedEntries[idx].end2
+          });
+          editedEntries[idx].totalHours = calculateTotalHours(editedEntries[idx].start1, editedEntries[idx].end1, editedEntries[idx].start2, editedEntries[idx].end2);
+          console.log('[showAdminUserTimesheets] New total hours:', editedEntries[idx].totalHours);
         });
         // On Call Hours (display only)
         const onCallTd = document.createElement('td');
@@ -2063,10 +2404,14 @@ function buildTimesheetTable(entries) {
           editedEntries[idx].comment = v;
         });
         // Total Hours
-        let totalHrs = (calculateHours(e.start1, e.end1) + calculateHours(e.start2, e.end2));
+        console.log('[showAdminUserTimesheets] Entry for date:', e.date);
+        console.log('[showAdminUserTimesheets] Entry values:', { start1: e.start1, end1: e.end1, start2: e.start2, end2: e.end2 });
+        console.log('[showAdminUserTimesheets] Calling calculateTotalHours');
+        let totalHrs = calculateTotalHours(e.start1, e.end1, e.start2, e.end2);
         if (Array.isArray(e.onCallSessions)) {
           totalHrs += calculateOnCallSessionsHours(e.onCallSessions);
         }
+        console.log('[showAdminUserTimesheets] Final total hours:', totalHrs);
         const hrsCell = document.createElement('td');
         hrsCell.textContent = (isNaN(totalHrs) ? 0 : totalHrs).toFixed(2);
   
@@ -2280,10 +2625,14 @@ function buildTimesheetTable(entries) {
       const job = maybeNone(e.jobDescription === "" ? "" : e.jobDescription);
       const cmt = maybeNone(e.comment === "" ? "" : e.comment);
       // Calculate total hours including on call
-      let totalHrs = (calculateHours(e.start1, e.end1) + calculateHours(e.start2, e.end2));
+      console.log('[printOrExportTimesheet] Entry for date:', e.date);
+      console.log('[printOrExportTimesheet] Entry values:', { start1: e.start1, end1: e.end1, start2: e.start2, end2: e.end2 });
+      console.log('[printOrExportTimesheet] Calling calculateTotalHours');
+      let totalHrs = calculateTotalHours(e.start1, e.end1, e.start2, e.end2);
       if (Array.isArray(e.onCallSessions)) {
         totalHrs += calculateOnCallSessionsHours(e.onCallSessions);
       }
+      console.log('[printOrExportTimesheet] Final total hours:', totalHrs);
       const hrs = maybeNone((isNaN(totalHrs) ? 0 : totalHrs).toFixed(2));
   
       html += `
