@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ALCO Timesheet Portal</title>
+  <style>
+    /* Basic resets */
+    * {
+      box-sizing: border-box;
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: #ddecf5; 
+      font-family: Arial, sans-serif;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+    }
+    header, footer {
+      background: #fff;
+      padding: 1rem;
+      text-align: center;
+      border-bottom: 1px solid #ccc;
+    }
+    footer {
+      border-top: 1px solid #ccc;
+      border-bottom: none;
+      margin-top: auto;
+    }
+    .page-content {
+      flex: 1 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 2rem;
+      width: 100%; 
+    }
+    .container {
+      width: 95%;
+      max-width: 1500px;
+      background: #fff;
+      margin: 2rem auto;
+      padding: 2rem;
+      border-radius: 8px; 
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    /* Headings */
+    h1, h2, h3, h4 {
+      margin-top: 0;
+      color: #333;
+    }
+
+    /* Basic button style */
+    button {
+      background: #4da6ff;
+      color: #fff;
+      border: none;
+      padding: 0.7rem 1.2rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+    button:hover {
+      background: #3399ff;
+    }
+
+    /* Rounded corners for inputs and selects */
+    input, select {
+      border-radius: 8px;
+    }
+
+    /* "View"/"Approve"/"Delete" etc. in a row */
+    .inline-button-group {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 0.6rem; 
+      margin-bottom: 0.6rem;
+    }
+
+    /* The 4 main user timesheet-creation buttons in a vertical stack, centered */
+    .vertical-button-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    /* Link styles */
+    .link {
+      color: #3399ff;
+      text-decoration: none;
+      cursor: pointer;
+      display: inline-block;
+      margin-top: 1rem;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    /* Table Wrappers: allow horizontal scroll if needed */
+    .table-wrapper {
+      width: 100%;
+      overflow-x: auto; 
+    }
+
+    /* Table styling (blue header row) */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 1rem;
+      background-color: #fff;
+    }
+    thead tr {
+      background-color: #4299e1;  
+      color: #fff;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 0.75rem;
+      text-align: center;
+      vertical-align: middle;
+      font-size: 0.9rem;
+      white-space: nowrap; 
+    }
+    th {
+      font-weight: 600;
+    }
+
+    .admin-button {
+      display: block;
+      margin-top: 1rem;
+      text-decoration: underline;
+      cursor: pointer;
+      font-size: 0.9rem;
+      text-align: center;
+    }
+
+    /* Timesheet item styling */
+    .timesheet-item {
+      background: #f9fcff; 
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      margin-bottom: 1rem;
+      padding: 1rem;
+      text-align: center;
+    }
+    .timesheet-item-header {
+      margin-bottom: 0.5rem;
+      font-weight: bold;
+    }
+    .timesheet-details {
+      margin: 1rem 0;
+    }
+    .timesheet-details.hidden {
+      display: none;
+    }
+
+    /* Center logout + gear side by side */
+    .logout-btn-container {
+      text-align: center;
+      margin-top: 1.5rem;
+      display: flex;
+      flex-direction: row; 
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+    }
+
+    /* Timesheet creation container */
+    .timesheet-entry-container {
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      margin-top: 1rem;
+      padding: 1rem;
+      background: #fff;
+      width: 100%;
+    }
+
+    /* Auth forms */
+    .auth-form-container {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      max-width: 300px;
+      margin: 0 auto;
+    }
+    .auth-form-container input {
+      width: 100%;
+      padding: 0.5rem;
+      margin: 0; 
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+    }
+
+    /* Extra spacing above the Create button */
+    #create-new-timesheet-container {
+      margin-top: 1.5rem;
+    }
+
+    /* "Pay Period Start Date" label bigger */
+    .start-date-container {
+      margin-top: 1rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem; 
+      font-size: 1.2rem;
+    }
+    .start-date-container label {
+      font-weight: 600; 
+    }
+
+    /* Bolder employee name in admin table */
+    #admin-users-table tbody td:first-child {
+      font-weight: bold; 
+    }
+
+    /* Approved Timesheets */
+    #admin-approved-wrapper {
+      margin-top: 2rem; 
+    }
+
+    /* Make " "/"NaN" invisible if needed */
+    .invisible-value {
+      color: transparent;       
+      display: inline-block;
+      width: 100%;
+      min-height: 1em;          
+      white-space: pre;         
+    }
+
+   
+
+    /* EASY FILL SETTINGS container */
+    #easyfill-settings-container {
+      display: none; 
+    }
+    #easyfill-settings-table {
+      width: 100%;
+      margin-top: 1rem;
+      border-collapse: collapse;
+    }
+    #easyfill-settings-table th, #easyfill-settings-table td {
+      border: 1px solid #ccc;
+      padding: 0.5rem;
+      text-align: center;
+      vertical-align: middle;
+    }
+    .easyfill-time-cell {
+      min-width: 80px;
+    }
+    #timesheet-entry-container select[name="jobDescription"],
+    #timesheet-entry-container input[name="comment"] {
+      max-width: 120px;
+    }
+
+    /* Add text-wrapping + 20px corner radius for "View" tables in Past Timesheets */
+    .timesheet-details .table-wrapper table {
+      border-radius: 20px; 
+      overflow: hidden;
+    }
+    .timesheet-details .table-wrapper th, 
+    .timesheet-details .table-wrapper td {
+      white-space: normal;
+      word-wrap: break-word;
+    }
+    .timesheet-details.admin-view .table-wrapper table {
+      border-radius: 20px;
+      overflow: hidden;
+    }
+    .timesheet-details.admin-view .table-wrapper th,
+    .timesheet-details.admin-view .table-wrapper td {
+      white-space: normal;
+      word-wrap: break-word;
+    }
+
+    /* Custom Jobs Section */
+    #custom-jobs-container {
+      
+      margin-top: 2rem;
+      border-top: 1px solid #ccc;
+      padding-top: 1rem;
+      text-align: center;
+    }
+    /* Wrap the input + button so the list is definitely below them */
+    #custom-jobs-container > div.custom-jobs-input-container {
+      margin-bottom: 1rem;
+    }
+    #custom-job-input {
+      width: 300px;
+      padding: 0.5rem;
+      font-size: 1rem;
+      margin-right: 0.5rem; /* small space between input and button */
+    }
+    #custom-jobs-list {
+      margin-top: 1rem;
+      list-style-type: none;
+      padding: 0;
+      display: inline-block;
+      text-align: left;
+    }
+    #custom-jobs-list li {
+      margin: 0.3rem 0;
+      /* Increase horizontal padding for spacing between text and button */
+      padding: 0.3rem 1rem;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    #custom-jobs-list li span.job-text {
+      cursor: pointer;
+    }
+    #custom-jobs-list li button.delete-job {
+      background: #ff4d4d;
+      border: none;
+      color: #fff;
+      margin-left:50px;
+      padding: 0.3rem 0.6rem;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+  
+    
+    
+    
+    
+  
+    th[data-label="On Call Hours"], td[data-label="On Call Hours"], th.on-call-hours, td.on-call-hours {
+      min-width: 220px !important;
+      width: 220px !important;
+      max-width: 240px;
+      white-space: nowrap;
+    }
+    /* Force On Call Hours column to be wide and text to stay on one line */
+    th:nth-child(6), td:nth-child(6) {
+      min-width: 200px !important;
+      width: 200px !important;
+      max-width: 250px;
+      white-space: nowrap !important;
+    }
+
+    th.on-call-header {
+      text-align: center !important;
+      vertical-align: middle;
+      white-space: normal;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+     /* MOBILE TWEAKS */
+     @media (max-width: 700px) {
+      table thead {
+        display: none;
+      }
+      table, table tbody, table tr, table td {
+        display: block;
+        width: 100%;
+      }
+      table tr {
+        margin-bottom: 1rem;
+        border-bottom: 1px solid #ccc;
+      }
+      table td {
+        position: relative;
+        padding-left: 45%; 
+        text-align: center;
+        border: none;
+        border-bottom: 1px solid #eee;
+      }
+      table td:before {
+        content: attr(data-label) " ";
+        position: absolute;
+        width: 40%; 
+        left: -0.9rem;
+        font-weight: bold;
+        color: #000;
+      }
+      .spacer-row td {
+        border: none;
+        background: none;
+        height: 8px;
+      }
+      table td {
+        padding: 0.4rem;
+        font-size: 0.85rem;
+      }
+      input[type="time"],
+      select[name="jobDescription"] {
+        width: 60%;
+      }
+      .container {
+        margin: 1rem 0.5rem;
+        padding: 1rem;
+        max-width: 100%;
+      }
+      body {
+        font-size: 0.95rem;
+      }
+      th, td {
+        font-size: 0.85rem;
+        padding: 0.5rem;
+      }
+      /* centre “Add On Call” no matter what */
+      .add-on-call-btn{
+        display:block;
+        margin:0.5rem auto;
+        margin-left: 67px;
+        
+        width:auto;
+      }
+
+      .add-on-call-btn.is-cancel {
+        margin-left: 115px;
+      }
+
+      .on-call-inputs-mobile {
+        margin-left: 110px;
+      }
+
+      .on-call-session-list > div {
+        margin-left: 110px;
+      }
+
+      /* Hide "On Call Hours" text in mobile mode */
+      table td[data-label="On Call Hours"]:before {
+        display: none;
+      }
+
+
+
+
+
+    }
+
+
+
+
+  </style>
+</head>
+<body>
+  <header><br>
+    <h1>ALCO Timesheet Portal</h1>
+  </header>
+
+  <div class="page-content">
+
+    <!-- AUTH container -->
+    <div class="container" id="auth-container">
+      <!-- User Login -->
+      <div id="user-auth-section">
+        <h2 style="text-align:center;">User Login</h2>
+        <div class="auth-form-container">
+          <input type="email" id="login-email" placeholder="Email">
+          <input type="password" id="login-password" placeholder="Password">
+          <button id="login-btn">Login</button>
+        </div>
+        <div style="text-align:center;">
+          <span class="link" id="go-to-signup">Don't have an account? Sign Up</span><br/>
+          <span class="link" id="forgot-password-link">Forgot Password?</span>
+        </div>
+      </div>
+
+      <!-- User Sign Up -->
+      <div id="user-signup-section" class="hidden">
+        <h2 style="text-align:center;">User Sign Up</h2>
+        <div class="auth-form-container">
+          <input type="text" id="signup-firstname" placeholder="First Name">
+          <input type="text" id="signup-lastname" placeholder="Last Name">
+          <input type="email" id="signup-email" placeholder="Email">
+          <input type="password" id="signup-password" placeholder="Password">
+          <button id="signup-btn">Sign Up</button>
+        </div>
+        <div style="text-align:center;">
+          <span class="link" id="go-to-login">Already have an account? Login</span>
+        </div>
+      </div>
+
+      <!-- Admin Login -->
+      <div id="admin-login-section" class="hidden">
+        <h2 style="text-align:center;">Admin Login</h2>
+        <div class="auth-form-container">
+          <input type="password" id="admin-password" placeholder="Admin Password">
+          <button id="admin-login-btn">Login as Admin</button>
+        </div>
+        <div style="text-align:center;">
+          <span class="link" id="go-to-user-login">Go to User Login</span>
+        </div>
+      </div>
+
+      <span class="admin-button" id="admin-access-link">Admin Login</span>
+    </div>
+    
+    <!-- USER DASHBOARD -->
+    <div class="container hidden" id="user-dashboard">
+      <h2 style="text-align:center;">Welcome, <span id="user-name-display"></span></h2>
+      <h3></h3>
+      <div class="timesheet-item" id="create-new-timesheet-container">
+        <button id="create-new-timesheet-btn">Create New Timesheet</button>
+      </div>
+      <div id="timesheet-start-section" class="hidden" style="text-align:center;">
+        <div class="start-date-container">
+          <label for="timesheet-start">Pay Period Start Date:</label>
+          <input type="date" id="timesheet-start" placeholder="mm/dd/yyyy" />
+        </div>
+      </div>
+      <div class="timesheet-entry-container hidden" id="timesheet-entry-container">
+        <div class="table-wrapper">
+          <div id="timesheet-form"></div>
+        </div>
+        <div class="vertical-button-stack">
+          <button id="easy-fill-btn">Easy Fill</button>
+          <button id="export-timesheet-btn">Export PDF</button>
+          <button id="submit-timesheet-btn">Submit Timesheet</button>
+          <button id="cancel-timesheet-btn">Cancel</button>
+        </div>
+      </div>
+      
+      <h3>Past Timesheets</h3>
+      <div id="past-timesheets"></div>
+      <div class="logout-btn-container">
+        <button id="gear-button">⚙</button>
+        <button id="logout-btn">Logout</button>
+      </div>
+    </div>
+
+    <!-- ADMIN DASHBOARD -->
+    <div class="container hidden" id="admin-dashboard">
+      <h2 style="text-align:center;">Admin Dashboard</h2>
+      <h3>Timesheets Pending Approval</h3>
+      <div class="container hidden" id="admin-pending-view-container"></div>
+      <div class="table-wrapper" id="admin-users-wrapper">
+        <!-- Pending table inserted dynamically -->
+      </div>
+      <br><br><br>
+      <h3>Approved Timesheets</h3>
+      <div class="table-wrapper" id="admin-approved-wrapper">
+        <!-- Approved table inserted dynamically -->
+      </div>
+      <div class="container hidden" id="admin-approved-view-container"></div>
+      <div class="logout-btn-container">
+        <button id="admin-logout-btn">Logout</button>
+      </div>
+    </div>
+
+    <!-- EASY FILL SETTINGS PAGE (only for user) -->
+    <div class="container" id="easyfill-settings-container">
+      <h2 style="text-align:center;">Easy Fill Settings</h2>
+      <p style="text-align:center;">
+        Below are your default start/end times, job, and comment for each day.
+        When you click <strong>Easy Fill</strong> on a new timesheet, 
+        these will be automatically inserted.
+      </p>
+      <div class="table-wrapper">
+        <table id="easyfill-settings-table">
+          <thead>
+            <tr>
+              <th>Day</th>
+              <th>Start 1</th>
+              <th>End 1</th>
+              <th>Start 2</th>
+              <th>End 2</th>
+              <th>Job</th>
+              <th>Comment</th>
+            </tr>
+          </thead>
+          <tbody id="easyfill-settings-tbody">
+            <!-- Populated dynamically -->
+          </tbody>
+        </table>
+      </div><br>
+      <center><button id="easyfill-edit-btn">Edit Easy Fill</button>
+      
+      
+      <br><br>
+      <div class="auth-form-container" >
+    <center><h3>Work Schedule</h3>
+    <select id="work-schedule">
+      <option value="biweekly">Bi-weekly</option>
+      <option value="weekly">Weekly</option>
+    </select><br><br>
+      
+      
+
+  </div>
+      
+      
+      <!-- Custom Jobs area -->
+      <div id="custom-jobs-container" style="display: none;">
+        <h3>Add Custom Job Descriptions</h3>
+
+        <!-- This container ensures the UL appears below the input/button -->
+        <div class="custom-jobs-input-container">
+          <input type="text" id="custom-job-input" placeholder="Enter a new job name">
+          <button id="add-custom-job-btn">Add Job</button>
+        </div>
+
+        <ul id="custom-jobs-list"></ul>
+      </div>
+      
+      
+    
+  
+
+
+      
+      
+      <div class="inline-button-group" style="margin-top:1rem;">
+        
+        <button id="easyfill-back-btn">Back</button>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    <p>&copy; 2024 ALCO Timesheet</p>
+  </footer>
+  <!-- EmailJS SDK for client-side email notifications -->
+<script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+<script>
+  emailjs.init("NawKOhIrdF9ajnZyt");
+</script>
+  <script type="module" src="script.js"></script>
+
+</body>
+</html>
