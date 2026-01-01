@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PDF → Word (Replica DOCX via Page Images)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--accent:#0A66C2}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;background:linear-gradient(180deg,#f5f7fb,#ffffff);color:var(--ink)}
+    .wrap{max-width:980px;margin:0 auto;padding:24px}
+    h1{margin:0 0 4px;font-size:28px}
+    p.m{margin:6px 0 0;color:var(--muted)}
+    .card{background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 30px rgba(2,6,23,.06)}
+    .p{padding:18px}
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+    .btn{appearance:none;display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer}
+    .btn.primary{background:#2563eb;border-color:#2563eb;color:#fff}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .hint{font-size:12px;color:var(--muted)}
+    input[type="number"]{width:90px;padding:8px 10px;border:1px solid var(--line);border-radius:8px}
+    .dz{border:2px dashed #c7d2fe;border-radius:14px;padding:22px;text-align:center}
+    .dz.ring{box-shadow:0 0 0 4px #a5b4fc66}
+    progress{width:100%}
+    .pages{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:10px}
+    .thumb{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}
+    .thumb img{display:block;width:100%;height:auto}
+    .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#334155}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>PDF → Word (Replica)</h1>
+    <p class="m">Pixel‑perfect DOCX by inserting each PDF page as a full‑page image. Works for <b>any</b> PDF. (Optional OCR layer can be added later.)</p>
+
+    <div class="card p" style="margin-top:14px">
+      <div class="row">
+        <label class="btn"><input id="file" type="file" accept="application/pdf" hidden>Choose PDF</label>
+        <div class="dz" id="dz">Drop PDF here or paste with <span class="mono">Ctrl+V</span></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label class="hint">Output DPI:
+          <input id="dpi" type="number" min="96" max="600" step="12" value="300" title="Rendering DPI (higher = larger DOCX, sharper)"/>
+        </label>
+        <label class="hint">Margins (inches):
+          <input id="margin" type="number" min="0" max="1" step="0.1" value="0" title="Page margins in Word"/>
+        </label>
+        <button id="convert" class="btn primary" disabled>Convert to Word (.docx)</button>
+      </div>
+      <div id="meta" class="hint" style="margin-top:8px;display:none"></div>
+      <div id="progWrap" style="margin-top:10px;display:none">
+        <progress id="prog" max="100" value="0"></progress>
+        <div class="hint"><span id="progText">Rendering…</span></div>
+      </div>
+    </div>
+
+    <div class="card p" style="margin-top:14px">
+      <div class="row" style="justify-content:space-between">
+        <div style="font-weight:600">Preview</div>
+        <div class="hint">(thumbnails)</div>
+      </div>
+      <div id="thumbs" class="pages"></div>
+    </div>
+  </div>
+
+  <!-- pdf.js (UMD) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+  <!-- docx (UMD) -->
+  <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+  <!-- (Optional for future) Tesseract.js for OCR: https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js -->
+
+  <script>
+  const fileInput = document.getElementById('file');
+  const dz = document.getElementById('dz');
+  const dpiInput = document.getElementById('dpi');
+  const marginInput = document.getElementById('margin');
+  const convertBtn = document.getElementById('convert');
+  const thumbs = document.getElementById('thumbs');
+  const meta = document.getElementById('meta');
+  const progWrap = document.getElementById('progWrap');
+  const prog = document.getElementById('prog');
+  const progText = document.getElementById('progText');
+
+  let currentPDF = null; let pdfName = 'document';
+
+  // drag/paste
+  ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev, e=>{e.preventDefault(); dz.classList.add('ring')}));
+  ;['dragleave','drop'].forEach(ev=>dz.addEventListener(ev, e=>{e.preventDefault(); dz.classList.remove('ring')}));
+  dz.addEventListener('drop', e=>{ const f=e.dataTransfer.files?.[0]; if(f) loadPDFFile(f); });
+  window.addEventListener('paste', e=>{ const f=[...e.clipboardData.files].find(f=>f.type==='application/pdf'); if(f) loadPDFFile(f); });
+  fileInput.addEventListener('change', e=>{ const f=e.target.files?.[0]; if(f) loadPDFFile(f); });
+
+  async function loadPDFFile(file){
+    pdfName = file.name.replace(/\.[Pp][Dd][Ff]$/, '') || 'document';
+    const buf = await file.arrayBuffer();
+    currentPDF = await pdfjsLib.getDocument({data: buf}).promise;
+    meta.style.display='block';
+    meta.textContent = `Pages: ${currentPDF.numPages} • File: ${file.name} • ${(file.size/1024/1024).toFixed(2)} MB`;
+    convertBtn.disabled = false;
+    // show quick thumbs (low DPI)
+    thumbs.innerHTML = '';
+    const lowDPI = 96; // speed thumb preview
+    for(let i=1;i<=Math.min(currentPDF.numPages, 8);i++){
+      const page = await currentPDF.getPage(i);
+      const vp1 = page.getViewport({ scale: 1 });
+      const scale = lowDPI/72;
+      const vp = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(vp.width);
+      canvas.height = Math.round(vp.height);
+      const ctx = canvas.getContext('2d', { willReadFrequently: false });
+      await page.render({ canvasContext: ctx, viewport: vp }).promise;
+      const url = canvas.toDataURL('image/png');
+      const div = Object.assign(document.createElement('div'), { className: 'thumb' });
+      const img = Object.assign(document.createElement('img'), { src: url, alt: `Page ${i}` });
+      div.appendChild(img); thumbs.appendChild(div);
+    }
+  }
+
+  convertBtn.addEventListener('click', async ()=>{
+    if(!currentPDF) return;
+    const dpi = Math.max(96, Math.min(600, parseInt(dpiInput.value||300,10)));
+    const marginIn = Math.max(0, Math.min(1, parseFloat(marginInput.value||0)));
+
+    progWrap.style.display='block'; prog.value=0; progText.textContent='Rendering pages…';
+
+    // Render every page to PNGs at selected DPI
+    const pages = [];
+    for(let p=1;p<=currentPDF.numPages;p++){
+      const page = await currentPDF.getPage(p);
+      const vp1 = page.getViewport({ scale: 1 }); // gives PDF points (1 pt = 1/72 in)
+      const inchW = vp1.width/72, inchH = vp1.height/72;
+      const scale = dpi/72; // CSS px per PDF pt
+      const vp = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(vp.width);
+      canvas.height = Math.round(vp.height);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff'; // flatten to white background
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      await page.render({ canvasContext: ctx, viewport: vp, intent: 'print' }).promise;
+      const url = canvas.toDataURL('image/png');
+      const bin = await (await fetch(url)).arrayBuffer();
+      pages.push({ bin, inchW, inchH });
+      prog.value = Math.round((p/currentPDF.numPages)*70); // 0-70 for render
+      progText.textContent = `Rendering ${p}/${currentPDF.numPages}…`;
+    }
+
+    // Build DOCX with page-sized images
+    progText.textContent = 'Assembling DOCX…'; prog.value = 75;
+    const { Document, Packer, Paragraph, ImageRun } = docx;
+
+    // Create sections: one per page to support varying page sizes/margins
+    const sections = pages.map(({bin, inchW, inchH})=>{
+      const pxW = Math.round(inchW*96), pxH = Math.round(inchH*96); // docx expects px-ish numbers
+      const marginTwip = Math.round(marginIn*72*20); // inches → points (72) → twips (×20)
+      return {
+        properties: {
+          page: { size: { width: Math.round(inchW*72*20), height: Math.round(inchH*72*20) }, margin: { top: marginTwip, right: marginTwip, bottom: marginTwip, left: marginTwip } }
+        },
+        children: [ new Paragraph({ children: [ new ImageRun({ data: bin, transformation: { width: pxW - Math.round((marginIn*2)*96), height: pxH - Math.round((marginIn*2)*96) } }) ] }) ]
+      };
+    });
+
+    const doc = new Document({ sections });
+    const blob = await Packer.toBlob(doc);
+    prog.value = 100; progText.textContent = 'Done';
+
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `${pdfName}_replica.docx` });
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>{progWrap.style.display='none';}, 1200);
+  });
+  </script>
+</body>
+</html>
