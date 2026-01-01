@@ -20,8 +20,4 @@ services:
         sync: false
       - key: FIREBASE_CLIENT_ID
         sync: false
-      - key: EMAIL_USER
-        sync: false
-      - key: EMAIL_PASS
-        sync: false
 
