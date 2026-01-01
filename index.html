@@ -2,655 +2,470 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>ALCO Timesheet Portal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Alco Water Services</title>
   <style>
-    /* Basic resets */
+    :root {
+      --blue: #0d6efd;
+      --blue-dark: #0a58ca;
+      --bg: #f4f7fb;
+      --text: #0f172a;
+      --muted: #475569;
+      --card: #ffffff;
+      --accent: #0ea5e9;
+    }
+
     * {
       box-sizing: border-box;
     }
-    html, body {
-      height: 100%;
+
+    body {
       margin: 0;
-      padding: 0;
-      background: #ddecf5; 
-      font-family: Arial, sans-serif;
-      color: #333;
-      display: flex;
-      flex-direction: column;
-    }
-    header, footer {
-      background: #fff;
-      padding: 1rem;
-      text-align: center;
-      border-bottom: 1px solid #ccc;
-    }
-    footer {
-      border-top: 1px solid #ccc;
-      border-bottom: none;
-      margin-top: auto;
-    }
-    .page-content {
-      flex: 1 0 auto;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      margin-bottom: 2rem;
-      width: 100%; 
-    }
-    .container {
-      width: 95%;
-      max-width: 1500px;
-      background: #fff;
-      margin: 2rem auto;
-      padding: 2rem;
-      border-radius: 8px; 
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at 20% 20%, #e0f2fe 0, #f8fafc 35%, #f8fafc 100%);
+      color: var(--text);
+      line-height: 1.6;
     }
 
-    /* Headings */
-    h1, h2, h3, h4 {
-      margin-top: 0;
-      color: #333;
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(8px);
+      background: rgba(255, 255, 255, 0.9);
+      border-bottom: 1px solid #e2e8f0;
     }
 
-    /* Basic button style */
-    button {
-      background: #4da6ff;
-      color: #fff;
-      border: none;
-      padding: 0.7rem 1.2rem;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 1rem;
-    }
-    button:hover {
-      background: #3399ff;
-    }
-
-    /* Rounded corners for inputs and selects */
-    input, select {
-      border-radius: 8px;
-    }
-
-    /* "View"/"Approve"/"Delete" etc. in a row */
-    .inline-button-group {
-      display: flex;
-      justify-content: center;
-      gap: 8px;
-      margin-top: 0.6rem; 
-      margin-bottom: 0.6rem;
-    }
-
-    /* The 4 main user timesheet-creation buttons in a vertical stack, centered */
-    .vertical-button-stack {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.5rem;
-      margin-top: 1rem;
-    }
-
-    /* Link styles */
-    .link {
-      color: #3399ff;
-      text-decoration: none;
-      cursor: pointer;
-      display: inline-block;
-      margin-top: 1rem;
-    }
-
-    .hidden {
-      display: none;
-    }
-
-    /* Table Wrappers: allow horizontal scroll if needed */
-    .table-wrapper {
-      width: 100%;
-      overflow-x: auto; 
-    }
-
-    /* Table styling (blue header row) */
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      margin-top: 1rem;
-      background-color: #fff;
-    }
-    thead tr {
-      background-color: #4299e1;  
-      color: #fff;
-    }
-    th, td {
-      border: 1px solid #ccc;
-      padding: 0.75rem;
-      text-align: center;
-      vertical-align: middle;
-      font-size: 0.9rem;
-      white-space: nowrap; 
-    }
-    th {
-      font-weight: 600;
-    }
-
-    .admin-button {
-      display: block;
-      margin-top: 1rem;
-      text-decoration: underline;
-      cursor: pointer;
-      font-size: 0.9rem;
-      text-align: center;
-    }
-
-    /* Timesheet item styling */
-    .timesheet-item {
-      background: #f9fcff; 
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      margin-bottom: 1rem;
-      padding: 1rem;
-      text-align: center;
-    }
-    .timesheet-item-header {
-      margin-bottom: 0.5rem;
-      font-weight: bold;
-    }
-    .timesheet-details {
-      margin: 1rem 0;
-    }
-    .timesheet-details.hidden {
-      display: none;
-    }
-
-    /* Center logout + gear side by side */
-    .logout-btn-container {
-      text-align: center;
-      margin-top: 1.5rem;
-      display: flex;
-      flex-direction: row; 
-      align-items: center;
-      justify-content: center;
-      gap: 1rem;
-    }
-
-    /* Timesheet creation container */
-    .timesheet-entry-container {
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      margin-top: 1rem;
-      padding: 1rem;
-      background: #fff;
-      width: 100%;
-    }
-
-    /* Auth forms */
-    .auth-form-container {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-      max-width: 300px;
+    .nav {
+      max-width: 1200px;
       margin: 0 auto;
-    }
-    .auth-form-container input {
-      width: 100%;
-      padding: 0.5rem;
-      margin: 0; 
-      border: 1px solid #ccc;
-      box-sizing: border-box;
-    }
-
-    /* Extra spacing above the Create button */
-    #create-new-timesheet-container {
-      margin-top: 1.5rem;
-    }
-
-    /* "Pay Period Start Date" label bigger */
-    .start-date-container {
-      margin-top: 1rem;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem; 
-      font-size: 1.2rem;
-    }
-    .start-date-container label {
-      font-weight: 600; 
-    }
-
-    /* Bolder employee name in admin table */
-    #admin-users-table tbody td:first-child {
-      font-weight: bold; 
-    }
-
-    /* Approved Timesheets */
-    #admin-approved-wrapper {
-      margin-top: 2rem; 
-    }
-
-    /* Make " "/"NaN" invisible if needed */
-    .invisible-value {
-      color: transparent;       
-      display: inline-block;
-      width: 100%;
-      min-height: 1em;          
-      white-space: pre;         
-    }
-
-   
-
-    /* EASY FILL SETTINGS container */
-    #easyfill-settings-container {
-      display: none; 
-    }
-    #easyfill-settings-table {
-      width: 100%;
-      margin-top: 1rem;
-      border-collapse: collapse;
-    }
-    #easyfill-settings-table th, #easyfill-settings-table td {
-      border: 1px solid #ccc;
-      padding: 0.5rem;
-      text-align: center;
-      vertical-align: middle;
-    }
-    .easyfill-time-cell {
-      min-width: 80px;
-    }
-    #timesheet-entry-container select[name="jobDescription"],
-    #timesheet-entry-container input[name="comment"] {
-      max-width: 120px;
-    }
-
-    /* Add text-wrapping + 20px corner radius for "View" tables in Past Timesheets */
-    .timesheet-details .table-wrapper table {
-      border-radius: 20px; 
-      overflow: hidden;
-    }
-    .timesheet-details .table-wrapper th, 
-    .timesheet-details .table-wrapper td {
-      white-space: normal;
-      word-wrap: break-word;
-    }
-    .timesheet-details.admin-view .table-wrapper table {
-      border-radius: 20px;
-      overflow: hidden;
-    }
-    .timesheet-details.admin-view .table-wrapper th,
-    .timesheet-details.admin-view .table-wrapper td {
-      white-space: normal;
-      word-wrap: break-word;
-    }
-
-    /* Custom Jobs Section */
-    #custom-jobs-container {
-      
-      margin-top: 2rem;
-      border-top: 1px solid #ccc;
-      padding-top: 1rem;
-      text-align: center;
-    }
-    /* Wrap the input + button so the list is definitely below them */
-    #custom-jobs-container > div.custom-jobs-input-container {
-      margin-bottom: 1rem;
-    }
-    #custom-job-input {
-      width: 300px;
-      padding: 0.5rem;
-      font-size: 1rem;
-      margin-right: 0.5rem; /* small space between input and button */
-    }
-    #custom-jobs-list {
-      margin-top: 1rem;
-      list-style-type: none;
-      padding: 0;
-      display: inline-block;
-      text-align: left;
-    }
-    #custom-jobs-list li {
-      margin: 0.3rem 0;
-      /* Increase horizontal padding for spacing between text and button */
-      padding: 0.3rem 1rem;
-      border: 1px solid #ccc;
-      border-radius: 8px;
+      padding: 14px 20px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 16px;
     }
-    #custom-jobs-list li span.job-text {
-      cursor: pointer;
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: var(--text);
+      text-decoration: none;
     }
-    #custom-jobs-list li button.delete-job {
-      background: #ff4d4d;
+
+    .brand img {
+      height: 96px;
+      width: auto;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+      background: #fff;
+    }
+
+    nav a {
+      text-decoration: none;
+      color: var(--muted);
+      font-weight: 600;
+      margin-left: 18px;
+      transition: color 0.2s ease, transform 0.2s ease;
+    }
+
+    nav a:hover {
+      color: var(--text);
+      transform: translateY(-1px);
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 18px;
+      border-radius: 10px;
       border: none;
-      color: #fff;
-      margin-left:50px;
-      padding: 0.3rem 0.6rem;
-      border-radius: 4px;
+      font-weight: 700;
       cursor: pointer;
-    }
-    
-  
-    
-    
-    
-    
-  
-    th[data-label="On Call Hours"], td[data-label="On Call Hours"], th.on-call-hours, td.on-call-hours {
-      min-width: 220px !important;
-      width: 220px !important;
-      max-width: 240px;
-      white-space: nowrap;
-    }
-    /* Force On Call Hours column to be wide and text to stay on one line */
-    th:nth-child(6), td:nth-child(6) {
-      min-width: 200px !important;
-      width: 200px !important;
-      max-width: 250px;
-      white-space: nowrap !important;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+      text-decoration: none;
+      color: #fff;
+      background: var(--blue);
+      box-shadow: 0 10px 30px rgba(13, 110, 253, 0.2);
     }
 
-    th.on-call-header {
-      text-align: center !important;
-      vertical-align: middle;
-      white-space: normal;
+    .btn:hover {
+      background: var(--blue-dark);
+      transform: translateY(-1px);
+      box-shadow: 0 16px 38px rgba(13, 110, 253, 0.26);
     }
 
+    .btn.outline {
+      background: #fff;
+      color: var(--text);
+      border: 1px solid #cbd5e1;
+      box-shadow: none;
+    }
 
+    .btn.outline:hover {
+      background: #f8fafc;
+      transform: translateY(-1px);
+    }
 
+    .hero {
+      max-width: 1200px;
+      margin: 40px auto 10px;
+      padding: 0 20px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 28px;
+      align-items: center;
+    }
 
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(13, 110, 253, 0.08);
+      color: var(--blue);
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
 
+    h1 {
+      font-size: clamp(2.4rem, 4vw, 3.4rem);
+      margin: 14px 0 12px;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
 
+    h1 span {
+      color: var(--blue);
+    }
 
+    .hero p {
+      color: var(--muted);
+      font-size: 1.05rem;
+      margin: 0 0 20px;
+      max-width: 640px;
+    }
 
+    .badge-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin: 20px 0 0;
+    }
 
+    .badge {
+      background: var(--card);
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-weight: 700;
+      color: var(--text);
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+    }
 
+    .hero-panel {
+      background: linear-gradient(145deg, #0d6efd, #0a58ca);
+      color: #fff;
+      padding: 26px;
+      border-radius: 18px;
+      box-shadow: 0 22px 60px rgba(13, 110, 253, 0.35);
+      display: grid;
+      gap: 14px;
+    }
 
+    .hero-panel h3 {
+      margin: 0 0 6px;
+      font-size: 1.3rem;
+    }
 
+    .panel-copy {
+      margin: 0 0 12px;
+      color: #e7efff;
+      font-size: 1.02rem;
+      line-height: 1.5;
+    }
 
+    .section {
+      max-width: 1200px;
+      margin: 28px auto;
+      padding: 0 20px;
+    }
 
+    .section h2 {
+      margin: 0 0 8px;
+      font-size: clamp(1.8rem, 3vw, 2.4rem);
+    }
 
+    .section p.lead {
+      margin: 0 0 18px;
+      color: var(--muted);
+      max-width: 760px;
+    }
 
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+    }
 
+    .card {
+      background: var(--card);
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 12px 36px rgba(15, 23, 42, 0.08);
+      transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
 
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 16px 46px rgba(15, 23, 42, 0.12);
+    }
 
+    .card h3 {
+      margin: 0 0 8px;
+      font-size: 1.15rem;
+    }
 
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.98rem;
+    }
 
+    .cta {
+      background: linear-gradient(135deg, #0d6efd, #0ea5e9);
+      color: #fff;
+      border-radius: 18px;
+      padding: 28px;
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 20px;
+      align-items: center;
+      box-shadow: 0 22px 60px rgba(14, 165, 233, 0.28);
+    }
 
+    .cta h3 {
+      margin: 0 0 6px;
+      font-size: 1.5rem;
+    }
 
+    .cta p {
+      margin: 0;
+      opacity: 0.95;
+    }
 
-     /* MOBILE TWEAKS */
-     @media (max-width: 700px) {
-      table thead {
+    .cta .btn {
+      justify-self: end;
+      background: #fff;
+      color: #0d6efd;
+      box-shadow: none;
+    }
+
+    .cta .btn:hover {
+      background: #e0f2fe;
+      color: #0a58ca;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    .list {
+      padding-left: 18px;
+      color: var(--muted);
+    }
+
+    footer {
+      margin: 40px 0 24px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    @media (max-width: 900px) {
+      .hero {
+        grid-template-columns: 1fr;
+      }
+
+      nav {
         display: none;
       }
-      table, table tbody, table tr, table td {
-        display: block;
-        width: 100%;
-      }
-      table tr {
-        margin-bottom: 1rem;
-        border-bottom: 1px solid #ccc;
-      }
-      table td {
-        position: relative;
-        padding-left: 45%; 
-        text-align: center;
-        border: none;
-        border-bottom: 1px solid #eee;
-      }
-      table td:before {
-        content: attr(data-label) " ";
-        position: absolute;
-        width: 40%; 
-        left: -0.9rem;
-        font-weight: bold;
-        color: #000;
-      }
-      .spacer-row td {
-        border: none;
-        background: none;
-        height: 8px;
-      }
-      table td {
-        padding: 0.4rem;
-        font-size: 0.85rem;
-      }
-      input[type="time"],
-      select[name="jobDescription"] {
-        width: 60%;
-      }
-      .container {
-        margin: 1rem 0.5rem;
-        padding: 1rem;
-        max-width: 100%;
-      }
-      body {
-        font-size: 0.95rem;
-      }
-      th, td {
-        font-size: 0.85rem;
-        padding: 0.5rem;
-      }
-      /* centre “Add On Call” no matter what */
-      .add-on-call-btn{
-        display:block;
-        margin:0.5rem auto;
-        margin-left: 67px;
-        
-        width:auto;
+
+      .cta {
+        grid-template-columns: 1fr;
       }
 
-      .add-on-call-btn.is-cancel {
-        margin-left: 115px;
+      .cta .btn {
+        justify-self: start;
       }
-
-      .on-call-inputs-mobile {
-        margin-left: 110px;
-      }
-
-      .on-call-session-list > div {
-        margin-left: 110px;
-      }
-
-      /* Hide "On Call Hours" text in mobile mode */
-      table td[data-label="On Call Hours"]:before {
-        display: none;
-      }
-
-
-
-
-
     }
-
-
-
-
   </style>
 </head>
 <body>
-  <header><br>
-    <h1>ALCO Timesheet Portal</h1>
+  <header>
+    <div class="nav">
+      <a class="brand" href="#">
+        <img src="./logo.jpg" alt="Alco Water Services logo">
+        <div>
+          <div>Alco Water Services</div>
+          <small style="color: var(--muted); font-weight: 600;">Water | Wastewater | Emergency</small>
+        </div>
+      </a>
+      <nav>
+        <a href="#services">Services</a>
+        <a href="#industries">Industries</a>
+        <a href="#coverage">Coverage</a>
+        <a href="#contact">Contact</a>
+      </nav>
+      <div class="nav-actions">
+        <a class="btn" href="tel:+18316024600">Call (831) 602-4600</a>
+      </div>
+    </div>
   </header>
 
-  <div class="page-content">
-
-    <!-- AUTH container -->
-    <div class="container" id="auth-container">
-      <!-- User Login -->
-      <div id="user-auth-section">
-        <h2 style="text-align:center;">User Login</h2>
-        <div class="auth-form-container">
-          <input type="email" id="login-email" placeholder="Email">
-          <input type="password" id="login-password" placeholder="Password">
-          <button id="login-btn">Login</button>
+  <main>
+    <section class="hero">
+      <div>
+        <div class="eyebrow">24/7 Dispatch • Certified Operators</div>
+        <h1>Reliable Water & Wastewater Services for <span>California</span>.</h1>
+        <p>
+          Alco Water Services keeps communities, utilities, and job sites running with certified operators, construction crews, and around-the-clock emergency response. Safety-led, schedule-focused, and customer first since day one.
+        </p>
+        <div class="nav-actions" style="gap: 12px; flex-wrap: wrap;">
+          <a class="btn" href="mailto:service@alcowater.com?subject=Service%20Request">Request Service</a>
+          <a class="btn outline" href="#services">View Capabilities</a>
         </div>
-        <div style="text-align:center;">
-          <span class="link" id="go-to-signup">Don't have an account? Sign Up</span><br/>
-          <span class="link" id="forgot-password-link">Forgot Password?</span>
-        </div>
-      </div>
-
-      <!-- User Sign Up -->
-      <div id="user-signup-section" class="hidden">
-        <h2 style="text-align:center;">User Sign Up</h2>
-        <div class="auth-form-container">
-          <input type="text" id="signup-firstname" placeholder="First Name">
-          <input type="text" id="signup-lastname" placeholder="Last Name">
-          <input type="email" id="signup-email" placeholder="Email">
-          <input type="password" id="signup-password" placeholder="Password">
-          <button id="signup-btn">Sign Up</button>
-        </div>
-        <div style="text-align:center;">
-          <span class="link" id="go-to-login">Already have an account? Login</span>
+        <div class="badge-grid">
+          <div class="badge">Grade 3 & 4 Certified Operators</div>
+          <div class="badge">Underground & Civil Construction Crews</div>
+          <div class="badge">24/7 Emergency Response</div>
+          <div class="badge">Serving Central & Northern California</div>
         </div>
       </div>
+    </section>
 
-      <!-- Admin Login -->
-      <div id="admin-login-section" class="hidden">
-        <h2 style="text-align:center;">Admin Login</h2>
-        <div class="auth-form-container">
-          <input type="password" id="admin-password" placeholder="Admin Password">
-          <button id="admin-login-btn">Login as Admin</button>
+    <section id="services" class="section">
+      <h2>Field Services Built for Reliability</h2>
+      <p class="lead">From routine O&M to emergency breaks, we staff and equip certified professionals to keep your water and wastewater systems online.</p>
+      <div class="cards">
+        <div class="card">
+          <h3>Operations & Maintenance</h3>
+          <p>Certified water and wastewater operators, sampling, reporting, compliance testing, and plant optimization.</p>
         </div>
-        <div style="text-align:center;">
-          <span class="link" id="go-to-user-login">Go to User Login</span>
+        <div class="card">
+          <h3>Underground & Civil</h3>
+          <p>Pipeline installs and repairs, valve replacements, hydrants, service laterals, mainline tie-ins, and paving restoration.</p>
         </div>
-      </div>
-
-      <span class="admin-button" id="admin-access-link">Admin Login</span>
-    </div>
-    
-    <!-- USER DASHBOARD -->
-    <div class="container hidden" id="user-dashboard">
-      <h2 style="text-align:center;">Welcome, <span id="user-name-display"></span></h2>
-      <h3></h3>
-      <div class="timesheet-item" id="create-new-timesheet-container">
-        <button id="create-new-timesheet-btn">Create New Timesheet</button>
-      </div>
-      <div id="timesheet-start-section" class="hidden" style="text-align:center;">
-        <div class="start-date-container">
-          <label for="timesheet-start">Pay Period Start Date:</label>
-          <input type="date" id="timesheet-start" placeholder="mm/dd/yyyy" />
+        <div class="card">
+          <h3>Emergency Response</h3>
+          <p>24/7 on-call crews for main breaks, overflows, storm events, and urgent shutdowns with rapid mobilization.</p>
         </div>
-      </div>
-      <div class="timesheet-entry-container hidden" id="timesheet-entry-container">
-        <div class="table-wrapper">
-          <div id="timesheet-form"></div>
+        <div class="card">
+          <h3>Temporary Systems</h3>
+          <p>Bypass pumping, temporary chlorination, tankering, and job-site water solutions to keep projects moving.</p>
         </div>
-        <div class="vertical-button-stack">
-          <button id="easy-fill-btn">Easy Fill</button>
-          <button id="export-timesheet-btn">Export PDF</button>
-          <button id="submit-timesheet-btn">Submit Timesheet</button>
-          <button id="cancel-timesheet-btn">Cancel</button>
+        <div class="card">
+          <h3>Safety & Compliance</h3>
+          <p>Confined space, trench safety, traffic control, and reporting aligned to CPUC and local requirements.</p>
+        </div>
+        <div class="card">
+          <h3>Customer Service</h3>
+          <p>Meter services, leak checks, shutoffs/turn-ons, and courteous field teams representing your brand.</p>
         </div>
       </div>
-      
-      <h3>Past Timesheets</h3>
-      <div id="past-timesheets"></div>
-      <div class="logout-btn-container">
-        <button id="gear-button">⚙</button>
-        <button id="logout-btn">Logout</button>
-      </div>
-    </div>
+    </section>
 
-    <!-- ADMIN DASHBOARD -->
-    <div class="container hidden" id="admin-dashboard">
-      <h2 style="text-align:center;">Admin Dashboard</h2>
-      <h3>Timesheets Pending Approval</h3>
-      <div class="container hidden" id="admin-pending-view-container"></div>
-      <div class="table-wrapper" id="admin-users-wrapper">
-        <!-- Pending table inserted dynamically -->
-      </div>
-      <br><br><br>
-      <h3>Approved Timesheets</h3>
-      <div class="table-wrapper" id="admin-approved-wrapper">
-        <!-- Approved table inserted dynamically -->
-      </div>
-      <div class="container hidden" id="admin-approved-view-container"></div>
-      <div class="logout-btn-container">
-        <button id="admin-logout-btn">Logout</button>
-      </div>
-    </div>
-
-    <!-- EASY FILL SETTINGS PAGE (only for user) -->
-    <div class="container" id="easyfill-settings-container">
-      <h2 style="text-align:center;">Easy Fill Settings</h2>
-      <p style="text-align:center;">
-        Below are your default start/end times, job, and comment for each day.
-        When you click <strong>Easy Fill</strong> on a new timesheet, 
-        these will be automatically inserted.
-      </p>
-      <div class="table-wrapper">
-        <table id="easyfill-settings-table">
-          <thead>
-            <tr>
-              <th>Day</th>
-              <th>Start 1</th>
-              <th>End 1</th>
-              <th>Start 2</th>
-              <th>End 2</th>
-              <th>Job</th>
-              <th>Comment</th>
-            </tr>
-          </thead>
-          <tbody id="easyfill-settings-tbody">
-            <!-- Populated dynamically -->
-          </tbody>
-        </table>
-      </div><br>
-      <center><button id="easyfill-edit-btn">Edit Easy Fill</button>
-      
-      
-      <br><br>
-      <div class="auth-form-container" >
-    <center><h3>Work Schedule</h3>
-    <select id="work-schedule">
-      <option value="biweekly">Bi-weekly</option>
-      <option value="weekly">Weekly</option>
-    </select><br><br>
-      
-      
-
-  </div>
-      
-      
-      <!-- Custom Jobs area -->
-      <div id="custom-jobs-container" style="display: none;">
-        <h3>Add Custom Job Descriptions</h3>
-
-        <!-- This container ensures the UL appears below the input/button -->
-        <div class="custom-jobs-input-container">
-          <input type="text" id="custom-job-input" placeholder="Enter a new job name">
-          <button id="add-custom-job-btn">Add Job</button>
+    <section id="industries" class="section">
+      <h2>Industries We Serve</h2>
+      <p class="lead">Public utilities, private systems, and contractors trust Alco to protect uptime and public safety.</p>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Municipal & District Utilities</h3>
+          <ul class="list">
+            <li>Treatment and distribution O&M</li>
+            <li>Regulatory sampling and reporting</li>
+            <li>Mainline repairs and hydrant programs</li>
+          </ul>
         </div>
-
-        <ul id="custom-jobs-list"></ul>
+        <div class="card">
+          <h3>Developers & Contractors</h3>
+          <ul class="list">
+            <li>Main tie-ins, services, and testing</li>
+            <li>Temporary water and bypass pumping</li>
+            <li>Restoration, paving, and traffic control</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Industrial & Private Systems</h3>
+          <ul class="list">
+            <li>System assessments and optimization</li>
+            <li>Certified operators and compliance support</li>
+            <li>Emergency response and contingency planning</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Property & HOAs</h3>
+          <ul class="list">
+            <li>Service calls, leak checks, and shutoffs</li>
+            <li>Meter programs and customer service</li>
+            <li>Preventive maintenance and repairs</li>
+          </ul>
+        </div>
       </div>
-      
-      
-    
-  
+    </section>
 
-
-      
-      
-      <div class="inline-button-group" style="margin-top:1rem;">
-        
-        <button id="easyfill-back-btn">Back</button>
+    <section id="coverage" class="section">
+      <div class="cta">
+        <div>
+          <h3>Central & Northern California Coverage</h3>
+          <p>Local crews mobilized from Monterey County and serving surrounding regions. Ask about current coverage and response windows for your location.</p>
+        </div>
+        <a class="btn" href="mailto:service@alcowater.com?subject=Coverage%20Check">Check Coverage</a>
       </div>
-    </div>
+    </section>
 
-  </div>
+    <section id="contact" class="section">
+      <h2>Talk with Dispatch</h2>
+      <p class="lead">Fast answers for emergencies, scheduled work, or project support.</p>
+      <div class="cards">
+        <div class="card">
+          <h3>Call 24/7</h3>
+          <p><strong>(831) 602-4600</strong><br>Dispatch and emergency response.</p>
+        </div>
+        <div class="card">
+          <h3>Email</h3>
+          <p><a href="mailto:service@alcowater.com">service@alcowater.com</a><br>Service requests and coverage checks.</p>
+        </div>
+      </div>
+    </section>
+  </main>
 
   <footer>
-    <p>&copy; 2024 ALCO Timesheet</p>
+    © 2025 Alco Water Services. Safety-led, customer-first field services.
   </footer>
-  <!-- EmailJS SDK for client-side email notifications -->
-<script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
-<script>
-  emailjs.init("NawKOhIrdF9ajnZyt");
-</script>
-  <script type="module" src="script.js"></script>
-
+  <script>
+    // Quick shortcut to Timesheet portal: Ctrl+Shift or Cmd+Shift
+    document.addEventListener("keydown", (event) => {
+      const isPortalShortcut = (event.ctrlKey || event.metaKey) && event.shiftKey;
+      if (isPortalShortcut && !event.altKey) {
+        window.location.href = "file:///Users/platnm/Desktop/Projects/alco/Timesheets/index.html";
+      }
+    });
+  </script>
 </body>
 </html>
